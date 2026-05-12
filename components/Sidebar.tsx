@@ -4,12 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx, Dot } from "@/components/primitives";
 
-const NAV = [
-  { href: "/",         label: "Feed",     glyph: "≡" },
-  { href: "/track",    label: "Track",    glyph: "◆" },
-  { href: "/sources",  label: "Sources",  glyph: "◴" },
-  { href: "/submit",   label: "Submit",   glyph: "✎" },
-  { href: "/clusters", label: "Clusters", glyph: "◎" },
+const SOURCES_NAV = [
+  { href: "/",        label: "Feed",    glyph: "≡" },
+  { href: "/track",   label: "Track",   glyph: "◆" },
+  { href: "/sources", label: "Sources", glyph: "◴" },
+  { href: "/submit",  label: "Manual",  glyph: "✎" },
 ];
 
 const SOON = [
@@ -43,20 +42,29 @@ export function Sidebar() {
       </div>
 
       <nav className="nav">
-        <div className="nav-section">Workflow</div>
-        {NAV.map((n) => {
+        <div className="nav-section">Sources Tracker</div>
+        {SOURCES_NAV.map((n) => {
           const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
           return (
             <Link
               key={n.href}
               href={n.href}
-              className={cx("nav-item", active && "nav-item-on")}
+              className={cx("nav-item nav-item-sub", active && "nav-item-on")}
             >
               <span className="nav-glyph">{n.glyph}</span>
               <span className="nav-label">{n.label}</span>
             </Link>
           );
         })}
+
+        <Link
+          href="/clusters"
+          className={cx("nav-item", path.startsWith("/clusters") && "nav-item-on")}
+          style={{ marginTop: 4 }}
+        >
+          <span className="nav-glyph">◎</span>
+          <span className="nav-label">Clusters</span>
+        </Link>
 
         <div className="nav-section" style={{ marginTop: 16 }}>
           Pipeline (locked)
