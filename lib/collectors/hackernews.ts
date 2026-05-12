@@ -4,6 +4,7 @@ interface HNHit {
   objectID: string;
   title?: string;
   story_text?: string;
+  comment_text?: string;
   url?: string;
   author: string;
   created_at: string;
@@ -28,7 +29,7 @@ export async function collectHackerNews(
     externalId: hit.objectID,
     url: hit.url ?? `https://news.ycombinator.com/item?id=${hit.objectID}`,
     title: hit.title ?? null,
-    body: hit.story_text ?? null,
+    body: hit.comment_text ?? hit.story_text ?? null,
     author: hit.author,
     publishedAt: new Date(hit.created_at),
     rawJson: hit,
