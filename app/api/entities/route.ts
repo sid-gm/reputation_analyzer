@@ -12,11 +12,16 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const entities = await db
-    .select()
-    .from(trackedEntities)
-    .orderBy(asc(trackedEntities.createdAt));
-  return NextResponse.json(entities);
+  try {
+    const entities = await db
+      .select()
+      .from(trackedEntities)
+      .orderBy(asc(trackedEntities.createdAt));
+    return NextResponse.json(entities);
+  } catch (err) {
+    console.error("[GET /api/entities]", err);
+    return NextResponse.json({ error: "Failed to load entities" }, { status: 500 });
+  }
 }
 
 export async function POST(req: Request) {
@@ -27,15 +32,19 @@ export async function POST(req: Request) {
   }
 
   const { label, queryString, entityType, googleAlertsFeedUrl } = parsed.data;
-  const [entity] = await db
-    .insert(trackedEntities)
-    .values({
-      label,
-      queryString,
-      entityType,
-      googleAlertsFeedUrl: googleAlertsFeedUrl || null,
-    })
-    .returning();
-
-  return NextResponse.json(entity, { status: 201 });
+  try {
+    const [entity] = await db
+      .insert(trackedEntities)
+      .values({
+        label,
+        queryString,
+        entityType,
+        googleAlertsFeedUrl: googleAlertsFeedUrl || null,
+      })
+      .returning();
+    return NextResponse.json(entity, { status: 201 });
+  } catch (err) {
+    console.error("[POST /api/entities]", err);
+    return NextResponse.json({ error: "Failed to save entity" }, { status: 500 });
+  }
 }

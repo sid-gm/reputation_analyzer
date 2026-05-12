@@ -192,12 +192,12 @@ export default function TrackPage() {
               </Field>
               <Field
                 label="Search query"
-                hint='Boolean syntax · use quotes for exact match, from: for handles'
+                hint='Boolean operators: "exact phrase" OR term1 OR term2 · use from:handle for Twitter accounts · commas are not supported'
                 full
               >
                 <input
                   className="ipt mono"
-                  placeholder='"Sam Altman" OR from:sama'
+                  placeholder='"Sam Altman" OR "sama" OR from:sama'
                   value={form.queryString}
                   onChange={(e) => setForm((f) => ({ ...f, queryString: e.target.value }))}
                   required
