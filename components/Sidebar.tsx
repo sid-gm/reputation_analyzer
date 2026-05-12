@@ -5,17 +5,17 @@ import { usePathname } from "next/navigation";
 import { cx, Dot } from "@/components/primitives";
 
 const NAV = [
-  { href: "/",        label: "Feed",    glyph: "≡" },
-  { href: "/track",   label: "Track",   glyph: "◆" },
-  { href: "/sources", label: "Sources", glyph: "◴" },
-  { href: "/submit",  label: "Submit",  glyph: "✎" },
+  { href: "/",         label: "Feed",     glyph: "≡" },
+  { href: "/track",    label: "Track",    glyph: "◆" },
+  { href: "/sources",  label: "Sources",  glyph: "◴" },
+  { href: "/submit",   label: "Submit",   glyph: "✎" },
+  { href: "/clusters", label: "Clusters", glyph: "◎" },
 ];
 
 const SOON = [
-  { label: "Clusters", stage: "P2" },
-  { label: "Classify",  stage: "P3" },
-  { label: "Analysis",  stage: "P4" },
-  { label: "Report",    stage: "P5" },
+  { label: "Classify", stage: "P3" },
+  { label: "Analysis", stage: "P4" },
+  { label: "Report",   stage: "P5" },
 ];
 
 export function Sidebar() {

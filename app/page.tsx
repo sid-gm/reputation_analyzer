@@ -51,6 +51,8 @@ export default function FeedPage() {
   const [page, setPage] = useState(1);
   const [embedRunning, setEmbedRunning] = useState(false);
   const [embedResult, setEmbedResult] = useState<string | null>(null);
+  const [clusterRunning, setClusterRunning] = useState(false);
+  const [clusterResult, setClusterResult] = useState<string | null>(null);
 
   const runEmbed = useCallback(async () => {
     setEmbedRunning(true);
@@ -67,6 +69,24 @@ export default function FeedPage() {
       setEmbedResult("error — check console");
     } finally {
       setEmbedRunning(false);
+    }
+  }, []);
+
+  const runCluster = useCallback(async () => {
+    setClusterRunning(true);
+    setClusterResult(null);
+    try {
+      const res = await fetch("/api/run/cluster", { method: "POST" });
+      const data = await res.json();
+      setClusterResult(
+        data.assigned === 0 && data.created === 0
+          ? "nothing to cluster"
+          : `${data.assigned} assigned · ${data.created} new`
+      );
+    } catch {
+      setClusterResult("error — check console");
+    } finally {
+      setClusterRunning(false);
     }
   }, []);
 
@@ -131,17 +151,19 @@ export default function FeedPage() {
             <span className="kbd kbd-soft">/</span>
           </label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button
-              className="btn"
-              onClick={runEmbed}
-              disabled={embedRunning}
-            >
+            <button className="btn" onClick={runEmbed} disabled={embedRunning}>
               {embedRunning ? "Embedding…" : "Run Embed"}
             </button>
             {embedResult && (
-              <span style={{ fontSize: 12, color: "var(--ink-40)", whiteSpace: "nowrap" }}>
-                {embedResult}
-              </span>
+              <span style={{ fontSize: 12, color: "var(--ink-40)", whiteSpace: "nowrap" }}>{embedResult}</span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button className="btn" onClick={runCluster} disabled={clusterRunning}>
+              {clusterRunning ? "Clustering…" : "Run Cluster"}
+            </button>
+            {clusterResult && (
+              <span style={{ fontSize: 12, color: "var(--ink-40)", whiteSpace: "nowrap" }}>{clusterResult}</span>
             )}
           </div>
           <a href="/submit" className="btn btn-primary">+ Submit</a>
