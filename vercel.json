@@ -1,0 +1,8 @@
+{
+  "crons": [
+    { "path": "/api/cron/hackernews",    "schedule": "0 * * * *" },
+    { "path": "/api/cron/reddit",        "schedule": "0 * * * *" },
+    { "path": "/api/cron/twitter",       "schedule": "0 * * * *" },
+    { "path": "/api/cron/google-alerts", "schedule": "0 * * * *" }
+  ]
+}

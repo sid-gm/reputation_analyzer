@@ -1,0 +1,41 @@
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { trackedEntities } from "@/lib/db/schema";
+import { asc } from "drizzle-orm";
+import { z } from "zod";
+
+const createSchema = z.object({
+  label: z.string().min(1),
+  queryString: z.string().min(1),
+  entityType: z.enum(["keyword", "executive", "product"]),
+  googleAlertsFeedUrl: z.string().url().optional().or(z.literal("")),
+});
+
+export async function GET() {
+  const entities = await db
+    .select()
+    .from(trackedEntities)
+    .orderBy(asc(trackedEntities.createdAt));
+  return NextResponse.json(entities);
+}
+
+export async function POST(req: Request) {
+  const body = await req.json();
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+
+  const { label, queryString, entityType, googleAlertsFeedUrl } = parsed.data;
+  const [entity] = await db
+    .insert(trackedEntities)
+    .values({
+      label,
+      queryString,
+      entityType,
+      googleAlertsFeedUrl: googleAlertsFeedUrl || null,
+    })
+    .returning();
+
+  return NextResponse.json(entity, { status: 201 });
+}
