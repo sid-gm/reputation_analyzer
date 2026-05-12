@@ -1,16 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { PlatformChip, EntityBadge, Field } from "@/components/primitives";
 
 type Entity = { id: string; label: string; entityType: string };
 
@@ -26,19 +17,20 @@ const emptyForm = {
 export default function SubmitPage() {
   const [entities, setEntities] = useState<Entity[]>([]);
   const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
   const [fetchingMeta, setFetchingMeta] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
+  const set = (k: keyof typeof form, v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
   useEffect(() => {
-    fetch("/api/entities")
-      .then((r) => r.json())
-      .then(setEntities);
+    fetch("/api/entities").then((r) => r.json()).then(setEntities);
   }, []);
 
-  const handleUrlBlur = async () => {
-    if (!form.url || form.title) return;
+  const handleFetch = async () => {
+    if (!form.url) return;
     setFetchingMeta(true);
     try {
       const res = await fetch(`/api/meta?url=${encodeURIComponent(form.url)}`);
@@ -50,9 +42,7 @@ export default function SubmitPage() {
           author: data.author ?? f.author,
         }));
       }
-    } catch {
-      // meta fetch is best-effort
-    }
+    } catch { /* best-effort */ }
     setFetchingMeta(false);
   };
 
@@ -60,123 +50,215 @@ export default function SubmitPage() {
     e.preventDefault();
     setSaving(true);
     setError("");
-    setSuccess(false);
-
-    const payload = {
-      ...form,
-      entityId: form.entityId === "none" ? undefined : form.entityId,
-    };
-
     const res = await fetch("/api/items/manual", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...form,
+        entityId: form.entityId === "none" ? undefined : form.entityId,
+      }),
     });
-
     if (res.ok) {
+      setDone(true);
       setForm(emptyForm);
-      setSuccess(true);
     } else {
       setError("Failed to submit. Check required fields.");
     }
     setSaving(false);
   };
 
+  const previewEntity = entities.find((e) => e.id === form.entityId);
+
   return (
-    <div className="max-w-xl">
-      <h1 className="text-xl font-semibold mb-2">Manual Submission</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Submit an article, post, or piece of content you found manually. It will appear in the feed tagged as <span className="font-medium">Manual</span>.
-      </p>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">URL</label>
-          <Input
-            type="url"
-            placeholder="https://…"
-            value={form.url}
-            onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-            onBlur={handleUrlBlur}
-          />
-          {fetchingMeta && (
-            <p className="text-xs text-muted-foreground">Fetching metadata…</p>
-          )}
+    <>
+      <header className="topbar">
+        <div>
+          <div className="eyebrow">Part 1 · Ingestion</div>
+          <h1 className="page-title">Manual submission</h1>
+          <p className="page-desc">Paste a URL or write up something the crawlers missed.</p>
         </div>
+      </header>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Title <span className="text-red-500">*</span>
-          </label>
-          <Input
-            placeholder="Article or post title"
-            value={form.title}
-            onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-            required
-          />
-        </div>
+      <div className="page">
+        <div className="submit-grid">
+          <form className="submit-form" onSubmit={handleSubmit}>
+            <div className="form-stack">
+              <Field
+                label="URL"
+                hint="Paste an article URL — we'll try to auto-fetch the title and author."
+                full
+              >
+                <div className="ipt-wrap">
+                  <input
+                    className="ipt mono"
+                    placeholder="https://…"
+                    value={form.url}
+                    onChange={(e) => set("url", e.target.value)}
+                    type="url"
+                  />
+                  <button
+                    type="button"
+                    className="ipt-action"
+                    onClick={handleFetch}
+                    disabled={!form.url || fetchingMeta}
+                  >
+                    {fetchingMeta ? "Fetching…" : "Fetch metadata"}
+                  </button>
+                </div>
+              </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">Summary / Body</label>
-          <Textarea
-            placeholder="Paste the key content or a summary…"
-            rows={4}
-            value={form.body}
-            onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))}
-          />
-        </div>
+              <Field
+                label="Title"
+                hint="Required. The headline you'd file this under."
+                full
+              >
+                <input
+                  className="ipt"
+                  placeholder="Article or post title"
+                  value={form.title}
+                  onChange={(e) => set("title", e.target.value)}
+                  required
+                />
+              </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Author</label>
-            <Input
-              placeholder="Author or handle"
-              value={form.author}
-              onChange={(e) => setForm((f) => ({ ...f, author: e.target.value }))}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-muted-foreground">Published date</label>
-            <Input
-              type="date"
-              value={form.publishedAt}
-              onChange={(e) => setForm((f) => ({ ...f, publishedAt: e.target.value }))}
-            />
-          </div>
-        </div>
+              <Field
+                label="Summary / body"
+                hint="Paste the key passage, or your own write-up."
+                full
+              >
+                <textarea
+                  className="ipt ipt-area"
+                  rows={6}
+                  placeholder="Paste the key content or write a summary…"
+                  value={form.body}
+                  onChange={(e) => set("body", e.target.value)}
+                />
+              </Field>
 
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-muted-foreground">
-            Link to tracked entity (optional)
-          </label>
-          <Select
-            value={form.entityId}
-            onValueChange={(v) => setForm((f) => ({ ...f, entityId: v ?? "none" }))}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="None" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              {entities.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              <div className="form-row">
+                <Field label="Author / handle" hint="Byline or @handle">
+                  <input
+                    className="ipt"
+                    placeholder="@author or Author Name"
+                    value={form.author}
+                    onChange={(e) => set("author", e.target.value)}
+                  />
+                </Field>
+                <Field label="Published date" hint="ISO date">
+                  <input
+                    className="ipt mono"
+                    type="date"
+                    value={form.publishedAt}
+                    onChange={(e) => set("publishedAt", e.target.value)}
+                  />
+                </Field>
+              </div>
 
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={saving}>
-            {saving ? "Submitting…" : "Submit"}
-          </Button>
-          {success && (
-            <p className="text-sm text-green-600">Submitted — visible in the <a href="/" className="underline">feed</a>.</p>
-          )}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+              <Field
+                label="Link to tracked entity"
+                hint="Routes this item into that entity's stream. Optional but recommended."
+                full
+              >
+                <select
+                  className="ipt"
+                  value={form.entityId}
+                  onChange={(e) => set("entityId", e.target.value)}
+                >
+                  <option value="none">— None —</option>
+                  {entities.map((e) => (
+                    <option key={e.id} value={e.id}>{e.label}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className="form-foot">
+                <div className="form-foot-meta">
+                  <PlatformChip platform="manual" />
+                  <span className="dim">Will appear in feed tagged Manual</span>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => { setForm(emptyForm); setDone(false); }}
+                  >
+                    Clear
+                  </button>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? "Submitting…" : "Submit to feed"}
+                  </button>
+                </div>
+              </div>
+
+              {done && (
+                <div className="banner banner-ok">
+                  <span style={{ fontSize: 12 }}>✓</span>
+                  Saved.{" "}
+                  <a href="/" className="ulink">View in feed →</a>
+                </div>
+              )}
+              {error && (
+                <div className="banner" style={{ background: "oklch(0.96 0.05 25)", color: "var(--err)", border: "1px solid oklch(0.86 0.10 25)" }}>
+                  {error}
+                </div>
+              )}
+            </div>
+          </form>
+
+          <aside className="submit-side">
+            <div className="side-card">
+              <div className="side-card-title">When to submit manually</div>
+              <ul className="side-list">
+                <li>An article behind a paywall the crawler can't reach.</li>
+                <li>A LinkedIn post — no LinkedIn collector yet.</li>
+                <li>A podcast episode, conference talk, or video.</li>
+                <li>Anything sent to you directly (email, DM) worth tracking.</li>
+              </ul>
+            </div>
+
+            <div className="side-card">
+              <div className="side-card-title">Live preview</div>
+              <article className="feedrow feedrow-medium feedrow-preview">
+                <div className="feedrow-rail" />
+                <div className="feedrow-left">
+                  <PlatformChip platform="manual" />
+                  <div className="feedrow-time">now</div>
+                </div>
+                <div className="feedrow-body">
+                  <div className="feedrow-head">
+                    <h3 className="feedrow-title">
+                      {form.title || <span className="dim">Title appears here…</span>}
+                    </h3>
+                  </div>
+                  <p className="feedrow-snippet">
+                    {form.body ? (
+                      form.body.slice(0, 180) + (form.body.length > 180 ? "…" : "")
+                    ) : (
+                      <span className="dim">Snippet preview will render here as you type.</span>
+                    )}
+                  </p>
+                  <div className="feedrow-meta">
+                    {form.author && <span className="meta-mono">{form.author}</span>}
+                    {previewEntity && (
+                      <EntityBadge label={previewEntity.label} type={previewEntity.entityType} />
+                    )}
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div className="side-card side-card-tip">
+              <div className="side-card-title">Tip — URL parsing</div>
+              <div className="side-card-body">
+                We use <code className="codepill">/api/meta</code> to extract{" "}
+                <code className="codepill">og:title</code> and{" "}
+                <code className="codepill">author</code>. If a site blocks scraping, paste the
+                text by hand — manual items get the same treatment in clustering.
+              </div>
+            </div>
+          </aside>
         </div>
-      </form>
-    </div>
+      </div>
+    </>
   );
 }

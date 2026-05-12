@@ -1,14 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  cx, PLATFORMS, PlatformChip, SignalTag, SentimentBar,
+  EntityBadge, Sparkline, Dot,
+} from "@/components/primitives";
 
 type FeedItem = {
   id: string;
@@ -23,140 +19,327 @@ type FeedItem = {
   createdAt: string;
 };
 
-type Entity = { id: string; label: string };
+type Entity = { id: string; label: string; entityType: string };
 
-const PLATFORM_COLORS: Record<string, string> = {
-  hackernews: "bg-orange-100 text-orange-800",
-  reddit: "bg-red-100 text-red-800",
-  twitter: "bg-sky-100 text-sky-800",
-  google_alerts: "bg-blue-100 text-blue-800",
-  manual: "bg-gray-100 text-gray-800",
-};
+function relativeTime(iso: string | null) {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
-const PLATFORM_LABELS: Record<string, string> = {
-  hackernews: "HackerNews",
-  reddit: "Reddit",
-  twitter: "X / Twitter",
-  google_alerts: "Google Alerts",
-  manual: "Manual",
-};
+function pseudoSpark(seed: number, len = 16): number[] {
+  return Array.from({ length: len }, (_, i) =>
+    Math.abs(Math.sin(i * 0.7 + seed) * 40 + 20)
+  );
+}
 
 export default function FeedPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [platform, setPlatform] = useState("all");
   const [entityId, setEntityId] = useState("all");
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState<"list" | "table">("list");
   const [loading, setLoading] = useState(true);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ limit: "50" });
+    const params = new URLSearchParams({ limit: "100" });
     if (platform !== "all") params.set("platform", platform);
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/items?${params}`);
-    const data = await res.json();
-    setItems(data);
+    setItems(await res.json());
     setLoading(false);
   }, [platform, entityId]);
 
   useEffect(() => {
-    fetch("/api/entities")
-      .then((r) => r.json())
-      .then(setEntities);
+    fetch("/api/entities").then((r) => r.json()).then(setEntities);
   }, []);
 
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  const filtered = useMemo(() => {
+    if (!query) return items;
+    const q = query.toLowerCase();
+    return items.filter(
+      (i) =>
+        i.title?.toLowerCase().includes(q) ||
+        i.body?.toLowerCase().includes(q) ||
+        i.author?.toLowerCase().includes(q)
+    );
+  }, [items, query]);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: items.length };
+    for (const k of Object.keys(PLATFORMS)) c[k] = 0;
+    for (const i of items) c[i.platform] = (c[i.platform] ?? 0) + 1;
+    return c;
+  }, [items]);
+
+  const spark1 = pseudoSpark(1);
+  const spark2 = pseudoSpark(2);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold">Raw Feed</h1>
-        <div className="flex gap-3">
-          <Select value={platform} onValueChange={(v) => setPlatform(v ?? "all")}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All platforms" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All platforms</SelectItem>
-              {Object.entries(PLATFORM_LABELS).map(([val, label]) => (
-                <SelectItem key={val} value={val}>{label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <>
+      <header className="topbar">
+        <div>
+          <div className="eyebrow">Part 1 · Ingestion</div>
+          <h1 className="page-title">Raw feed</h1>
+          <p className="page-desc">Every item collected across all platforms, freshest first.</p>
+        </div>
+        <div className="topbar-actions">
+          <label className="search">
+            <span className="search-icon">⌕</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search feed…"
+            />
+            <span className="kbd kbd-soft">/</span>
+          </label>
+          <a href="/submit" className="btn btn-primary">+ Submit</a>
+        </div>
+      </header>
 
-          <Select value={entityId} onValueChange={(v) => setEntityId(v ?? "all")}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="All entities" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All entities</SelectItem>
-              {entities.map((e) => (
-                <SelectItem key={e.id} value={e.id}>{e.label}</SelectItem>
+      <div className="page">
+        <div className="kpi-row">
+          <div className="kpi">
+            <div className="kpi-top">
+              <div className="kpi-label">Total items</div>
+              <Sparkline values={spark1} color="var(--ink-40)" />
+            </div>
+            <div className="kpi-mid">
+              <div className="kpi-value">{items.length}</div>
+              <div className="kpi-delta kpi-delta-up">▲ ingested</div>
+            </div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-top">
+              <div className="kpi-label">Sources active</div>
+              <Sparkline values={spark2} color="var(--accent)" fill />
+            </div>
+            <div className="kpi-mid">
+              <div className="kpi-value">
+                {Object.keys(PLATFORMS).filter((k) => (counts[k] ?? 0) > 0).length}
+              </div>
+              <div className="kpi-delta kpi-delta-flat">→ of 5</div>
+            </div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-top">
+              <div className="kpi-label">Tracked entities</div>
+            </div>
+            <div className="kpi-mid">
+              <div className="kpi-value">{entities.length}</div>
+              <div className="kpi-delta kpi-delta-flat">→ configured</div>
+            </div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-top">
+              <div className="kpi-label">Cron status</div>
+            </div>
+            <div className="kpi-mid">
+              <div className="kpi-value" style={{ fontSize: 20, marginTop: 4 }}>
+                <Dot color="var(--ok)" pulse size={10} />
+              </div>
+              <div className="kpi-delta kpi-delta-up">▲ Healthy</div>
+            </div>
+            <div className="kpi-sub">Polls every hour</div>
+          </div>
+        </div>
+
+        <div className="toolbar">
+          <div className="filter-group">
+            <span className="filter-label">Platform</span>
+            <div className="seg seg-mono">
+              <button
+                className={cx("seg-btn", platform === "all" && "seg-btn-on")}
+                onClick={() => setPlatform("all")}
+              >
+                All <span className="seg-count">{counts.all}</span>
+              </button>
+              {Object.entries(PLATFORMS).map(([k, p]) => (
+                <button
+                  key={k}
+                  className={cx("seg-btn", platform === k && "seg-btn-on")}
+                  onClick={() => setPlatform(k)}
+                >
+                  <span
+                    className="seg-pdot"
+                    style={{ background: `oklch(0.62 0.16 ${p.hue})` }}
+                  />
+                  {p.label}{" "}
+                  <span className="seg-count">{counts[k] ?? 0}</span>
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
+          </div>
+
+          <div className="filter-group filter-group-right">
+            <select
+              className="select"
+              value={entityId}
+              onChange={(e) => setEntityId(e.target.value)}
+            >
+              <option value="all">All entities ({entities.length})</option>
+              {entities.map((e) => (
+                <option key={e.id} value={e.id}>{e.label}</option>
+              ))}
+            </select>
+            <div className="seg">
+              <button
+                className={cx("seg-btn", view === "list" && "seg-btn-on")}
+                onClick={() => setView("list")}
+              >
+                List
+              </button>
+              <button
+                className={cx("seg-btn", view === "table" && "seg-btn-on")}
+                onClick={() => setView("table")}
+              >
+                Table
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="result-meta">
+          <span><strong>{filtered.length}</strong> of {items.length} items</span>
+          <span className="dim">·</span>
+          <span className="dim">Deduplicated on ingest · sorted by recency</span>
+        </div>
+
+        {loading ? (
+          <div className="empty">
+            <div className="empty-mark">…</div>
+            <div className="empty-title">Loading feed</div>
+          </div>
+        ) : view === "list" ? (
+          <FeedList items={filtered} entities={entities} />
+        ) : (
+          <FeedTable items={filtered} entities={entities} />
+        )}
+      </div>
+    </>
+  );
+}
+
+function FeedList({ items, entities }: { items: FeedItem[]; entities: Entity[] }) {
+  if (items.length === 0) return <Empty />;
+  return (
+    <div className="feedlist">
+      {items.map((item) => (
+        <FeedRow key={item.id} item={item} entities={entities} />
+      ))}
+    </div>
+  );
+}
+
+function FeedRow({ item, entities }: { item: FeedItem; entities: Entity[] }) {
+  const ent = entities.find((e) => e.id === item.entityId);
+  const sentiment = 0;
+  return (
+    <article className="feedrow feedrow-low">
+      <div className="feedrow-rail" />
+      <div className="feedrow-left">
+        <PlatformChip platform={item.platform} />
+        <div className="feedrow-time">{relativeTime(item.publishedAt ?? item.createdAt)}</div>
+      </div>
+      <div className="feedrow-body">
+        <div className="feedrow-head">
+          <h3 className="feedrow-title">
+            {item.url ? (
+              <a href={item.url} target="_blank" rel="noopener noreferrer">
+                {item.title ?? item.body?.slice(0, 120) ?? "(no title)"}
+              </a>
+            ) : (
+              item.title ?? item.body?.slice(0, 120) ?? "(no title)"
+            )}
+          </h3>
+          <SignalTag level="low" />
+        </div>
+        {item.body && item.title && (
+          <p className="feedrow-snippet">{item.body}</p>
+        )}
+        <div className="feedrow-meta">
+          {item.author && <span className="meta-mono">{item.author}</span>}
+          {ent && <EntityBadge label={ent.label} type={ent.entityType} />}
+          <span className="meta-sent">
+            <span className="meta-sent-label">sentiment</span>
+            <SentimentBar value={sentiment} />
+            <span className="meta-mono dim">{sentiment.toFixed(2)}</span>
+          </span>
         </div>
       </div>
+      <div className="feedrow-actions">
+        <button className="iconbtn" title="Star">☆</button>
+        {item.url && (
+          <a className="iconbtn" href={item.url} target="_blank" rel="noopener noreferrer" title="Open">↗</a>
+        )}
+      </div>
+    </article>
+  );
+}
 
-      {loading ? (
-        <p className="text-muted-foreground text-sm">Loading…</p>
-      ) : items.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No items yet. Configure sources in{" "}
-          <a href="/track" className="underline">Track</a> and run a cron poll, or{" "}
-          <a href="/submit" className="underline">submit manually</a>.
-        </p>
-      ) : (
-        <div className="divide-y">
-          {items.map((item) => (
-            <div key={item.id} className="py-4">
-              <div className="flex items-start gap-3">
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap mt-0.5 ${
-                    PLATFORM_COLORS[item.platform] ?? "bg-gray-100 text-gray-700"
-                  }`}
-                >
-                  {PLATFORM_LABELS[item.platform] ?? item.platform}
-                </span>
-                <div className="flex-1 min-w-0">
-                  {item.url ? (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-sm hover:underline leading-snug block"
-                    >
-                      {item.title ?? item.body?.slice(0, 120) ?? "(no title)"}
+function FeedTable({ items, entities }: { items: FeedItem[]; entities: Entity[] }) {
+  if (items.length === 0) return <Empty />;
+  return (
+    <div className="tbl-wrap">
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th style={{ width: 70 }}>Src</th>
+            <th style={{ width: 80 }}>Time</th>
+            <th>Title</th>
+            <th style={{ width: 200 }}>Entity</th>
+            <th style={{ width: 120 }}>Sentiment</th>
+            <th style={{ width: 90 }}>Class</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((i) => {
+            const ent = entities.find((e) => e.id === i.entityId);
+            return (
+              <tr key={i.id}>
+                <td><PlatformChip platform={i.platform} /></td>
+                <td className="mono dim">{relativeTime(i.publishedAt ?? i.createdAt)}</td>
+                <td className="tbl-title">
+                  {i.url ? (
+                    <a href={i.url} target="_blank" rel="noopener noreferrer">
+                      {i.title ?? i.body?.slice(0, 80) ?? "(no title)"}
                     </a>
                   ) : (
-                    <p className="font-medium text-sm leading-snug">
-                      {item.title ?? item.body?.slice(0, 120) ?? "(no title)"}
-                    </p>
+                    i.title ?? "(no title)"
                   )}
-                  {item.body && item.title && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                      {item.body}
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                    {item.author && <span>{item.author}</span>}
-                    {item.publishedAt && (
-                      <span>{new Date(item.publishedAt).toLocaleDateString()}</span>
-                    )}
-                    {item.entityLabel && (
-                      <Badge variant="outline" className="text-xs h-4 px-1.5">
-                        {item.entityLabel}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+                </td>
+                <td>{ent && <EntityBadge label={ent.label} type={ent.entityType} />}</td>
+                <td><SentimentBar value={0} /></td>
+                <td><SignalTag level="low" /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Empty() {
+  return (
+    <div className="empty">
+      <div className="empty-mark">∅</div>
+      <div className="empty-title">Nothing here yet</div>
+      <div className="empty-sub">
+        Add entities in{" "}
+        <a href="/track" className="ulink">Track</a>, configure sources in{" "}
+        <a href="/sources" className="ulink">Sources</a>, or{" "}
+        <a href="/submit" className="ulink">submit manually</a>.
+      </div>
     </div>
   );
 }
