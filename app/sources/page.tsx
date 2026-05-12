@@ -6,6 +6,7 @@ import { cx, Dot, PlatformChip, Sparkline } from "@/components/primitives";
 type EnvStatus = { hackernews: boolean; reddit: boolean; twitter: boolean };
 
 type GAStats = { today: number; sevenDays: number; lastPoll: string | null };
+type HNStats = { today: number; sevenDays: number; lastPoll: string | null };
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
@@ -71,6 +72,7 @@ export default function SourcesPage() {
   const [alertCount, setAlertCount] = useState(0);
   const [pollStatus, setPollStatus] = useState<Record<string, "idle" | "polling" | { inserted: number } | "error">>({});
   const [gaStats, setGaStats] = useState<GAStats | null>(null);
+  const [hnStats, setHnStats] = useState<HNStats | null>(null);
 
   useEffect(() => {
     fetch("/api/sources/status").then((r) => r.json()).then(setEnvStatus);
@@ -80,6 +82,7 @@ export default function SourcesPage() {
         setAlertCount(entities.filter((e) => e.googleAlertsFeedUrl).length)
       );
     fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
+    fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
   }, []);
 
   const isConnected = (key: string) => {
@@ -91,6 +94,18 @@ export default function SourcesPage() {
       return envStatus?.twitter ? "active" : "offline";
     return "offline";
   };
+
+  async function pollHackerNews() {
+    setPollStatus((s) => ({ ...s, hackernews: "polling" }));
+    try {
+      const res = await fetch("/api/sources/poll/hackernews", { method: "POST" });
+      const data = await res.json();
+      setPollStatus((s) => ({ ...s, hackernews: { inserted: data.inserted ?? 0 } }));
+      fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
+    } catch {
+      setPollStatus((s) => ({ ...s, hackernews: "error" }));
+    }
+  }
 
   async function pollGoogleAlerts() {
     setPollStatus((s) => ({ ...s, google_alerts: "polling" }));
@@ -155,19 +170,25 @@ export default function SourcesPage() {
                   <div>
                     <div className="scard-stat-label">Today</div>
                     <div className="scard-stat-value">
-                      {s.key === "google_alerts" ? (gaStats ? gaStats.today : "—") : "—"}
+                      {s.key === "google_alerts" ? (gaStats ? gaStats.today : "—")
+                        : s.key === "hackernews" ? (hnStats ? hnStats.today : "—")
+                        : "—"}
                     </div>
                   </div>
                   <div>
                     <div className="scard-stat-label">7 days</div>
                     <div className="scard-stat-value">
-                      {s.key === "google_alerts" ? (gaStats ? gaStats.sevenDays : "—") : "—"}
+                      {s.key === "google_alerts" ? (gaStats ? gaStats.sevenDays : "—")
+                        : s.key === "hackernews" ? (hnStats ? hnStats.sevenDays : "—")
+                        : "—"}
                     </div>
                   </div>
                   <div>
                     <div className="scard-stat-label">Last poll</div>
                     <div className="scard-stat-value mono">
-                      {s.key === "google_alerts" ? relativeTime(gaStats?.lastPoll ?? null) : "—"}
+                      {s.key === "google_alerts" ? relativeTime(gaStats?.lastPoll ?? null)
+                        : s.key === "hackernews" ? relativeTime(hnStats?.lastPoll ?? null)
+                        : "—"}
                     </div>
                   </div>
                 </div>
@@ -215,8 +236,10 @@ export default function SourcesPage() {
                 )}
 
                 <div className="scard-foot">
-                  {s.key === "google_alerts" ? (() => {
-                    const ps = pollStatus["google_alerts"] ?? "idle";
+                  {(s.key === "google_alerts" || s.key === "hackernews") ? (() => {
+                    const psKey = s.key === "google_alerts" ? "google_alerts" : "hackernews";
+                    const onPoll = s.key === "google_alerts" ? pollGoogleAlerts : pollHackerNews;
+                    const ps = pollStatus[psKey] ?? "idle";
                     const polling = ps === "polling";
                     const label = ps === "polling"
                       ? "Polling…"
@@ -228,7 +251,7 @@ export default function SourcesPage() {
                     return (
                       <button
                         className="btn btn-ghost btn-sm"
-                        onClick={pollGoogleAlerts}
+                        onClick={onPoll}
                         disabled={polling}
                       >
                         {label}

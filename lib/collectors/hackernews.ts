@@ -13,10 +13,13 @@ interface HNHit {
 }
 
 export async function collectHackerNews(
-  entity: TrackedEntity
+  entity: TrackedEntity,
+  opts?: { limit?: number; since?: number }
 ): Promise<NewIngestedItem[]> {
+  const limit = opts?.limit ?? 20;
   const query = encodeURIComponent(entity.queryString);
-  const url = `https://hn.algolia.com/api/v1/search_by_date?query=${query}&hitsPerPage=20&tags=(story,comment)`;
+  let url = `https://hn.algolia.com/api/v1/search_by_date?query=${query}&hitsPerPage=${limit}&tags=(story,comment)`;
+  if (opts?.since) url += `&numericFilters=created_at_i%3E${opts.since}`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HN API error: ${res.status}`);
