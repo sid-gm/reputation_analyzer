@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { ingestedItems, trackedEntities } from "@/lib/db/schema";
+import { ingestedItems, trackedEntities, redditSubreddits } from "@/lib/db/schema";
 import type { NewIngestedItem } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
@@ -17,6 +17,10 @@ export async function upsertItems(items: NewIngestedItem[]): Promise<number> {
 
 export async function getAllEntities() {
   return db.select().from(trackedEntities).orderBy(trackedEntities.createdAt);
+}
+
+export async function getAllSubreddits() {
+  return db.select().from(redditSubreddits).orderBy(redditSubreddits.createdAt);
 }
 
 export async function getEntitiesByType(type: "hackernews" | "reddit" | "twitter" | "google_alerts") {

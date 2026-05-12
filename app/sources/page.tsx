@@ -7,6 +7,7 @@ type EnvStatus = { hackernews: boolean; reddit: boolean; twitter: boolean };
 
 type GAStats = { today: number; sevenDays: number; lastPoll: string | null };
 type HNStats = { today: number; sevenDays: number; lastPoll: string | null };
+type RedditStats = { today: number; sevenDays: number; lastPoll: string | null };
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
@@ -37,7 +38,7 @@ const SOURCE_DEFS: SourceDef[] = [
   {
     key: "reddit",
     name: "Reddit",
-    desc: "OAuth2 client credentials flow, searches across all subreddits. Returns posts sorted by new.",
+    desc: "OAuth2 client credentials flow. Fetches new posts from configured subreddits and matches against tracked entity keywords.",
     requiresEnv: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
   },
   {
@@ -73,6 +74,9 @@ export default function SourcesPage() {
   const [pollStatus, setPollStatus] = useState<Record<string, "idle" | "polling" | { inserted: number } | "error">>({});
   const [gaStats, setGaStats] = useState<GAStats | null>(null);
   const [hnStats, setHnStats] = useState<HNStats | null>(null);
+  const [redditStats, setRedditStats] = useState<RedditStats | null>(null);
+  const [subreddits, setSubreddits] = useState<string[]>([]);
+  const [subredditInput, setSubredditInput] = useState("");
 
   useEffect(() => {
     fetch("/api/sources/status").then((r) => r.json()).then(setEnvStatus);
@@ -83,38 +87,60 @@ export default function SourcesPage() {
       );
     fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
     fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
+    fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
+    fetch("/api/subreddits")
+      .then((r) => r.json())
+      .then((rows: { subredditName: string }[]) =>
+        setSubreddits(rows.map((r) => r.subredditName))
+      );
   }, []);
+
+  async function addSubreddit() {
+    const name = subredditInput.trim().replace(/^r\//i, "");
+    if (!name) return;
+    const res = await fetch("/api/subreddits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subredditName: name }),
+    });
+    if (res.ok) {
+      setSubreddits((prev) => (prev.includes(name) ? prev : [...prev, name]));
+      setSubredditInput("");
+    }
+  }
+
+  async function removeSubreddit(name: string) {
+    await fetch(`/api/subreddits/${name}`, { method: "DELETE" });
+    setSubreddits((prev) => prev.filter((s) => s !== name));
+  }
 
   const isConnected = (key: string) => {
     if (key === "hackernews" || key === "manual") return "active";
     if (key === "google_alerts") return alertCount > 0 ? "active" : "offline";
     if (key === "reddit")
-      return envStatus?.reddit ? "active" : "offline";
+      return envStatus?.reddit ? (subreddits.length > 0 ? "active" : "degraded") : "offline";
     if (key === "twitter")
       return envStatus?.twitter ? "active" : "offline";
     return "offline";
   };
 
-  async function pollHackerNews() {
-    setPollStatus((s) => ({ ...s, hackernews: "polling" }));
-    try {
-      const res = await fetch("/api/sources/poll/hackernews", { method: "POST" });
-      const data = await res.json();
-      setPollStatus((s) => ({ ...s, hackernews: { inserted: data.inserted ?? 0 } }));
-      fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
-    } catch {
-      setPollStatus((s) => ({ ...s, hackernews: "error" }));
-    }
-  }
+  async function pollSource(key: string) {
+    const endpoint =
+      key === "google_alerts" ? "/api/sources/poll/google-alerts"
+      : key === "hackernews" ? "/api/sources/poll/hackernews"
+      : key === "reddit" ? "/api/sources/poll/reddit"
+      : null;
+    if (!endpoint) return;
 
-  async function pollGoogleAlerts() {
-    setPollStatus((s) => ({ ...s, google_alerts: "polling" }));
+    setPollStatus((s) => ({ ...s, [key]: "polling" }));
     try {
-      const res = await fetch("/api/sources/poll/google-alerts", { method: "POST" });
+      const res = await fetch(endpoint, { method: "POST" });
       const data = await res.json();
-      setPollStatus((s) => ({ ...s, google_alerts: { inserted: data.inserted ?? 0 } }));
+      setPollStatus((s) => ({ ...s, [key]: { inserted: data.inserted ?? 0 } }));
+      if (key === "hackernews") fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
+      if (key === "reddit") fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
     } catch {
-      setPollStatus((s) => ({ ...s, google_alerts: "error" }));
+      setPollStatus((s) => ({ ...s, [key]: "error" }));
     }
   }
 
@@ -144,6 +170,34 @@ export default function SourcesPage() {
             const status = isConnected(s.key) as "active" | "degraded" | "offline";
             const tone = status === "active" ? "ok" : status === "degraded" ? "warn" : "err";
             const spark = pseudoSpark(idx + 1);
+
+            const statsToday =
+              s.key === "google_alerts" ? (gaStats ? gaStats.today : "—")
+              : s.key === "hackernews" ? (hnStats ? hnStats.today : "—")
+              : s.key === "reddit" ? (redditStats ? redditStats.today : "—")
+              : "—";
+            const statsSevenDays =
+              s.key === "google_alerts" ? (gaStats ? gaStats.sevenDays : "—")
+              : s.key === "hackernews" ? (hnStats ? hnStats.sevenDays : "—")
+              : s.key === "reddit" ? (redditStats ? redditStats.sevenDays : "—")
+              : "—";
+            const statsLastPoll =
+              s.key === "google_alerts" ? relativeTime(gaStats?.lastPoll ?? null)
+              : s.key === "hackernews" ? relativeTime(hnStats?.lastPoll ?? null)
+              : s.key === "reddit" ? relativeTime(redditStats?.lastPoll ?? null)
+              : "—";
+
+            const ps = pollStatus[s.key] ?? "idle";
+            const polling = ps === "polling";
+            const pollLabel = ps === "polling"
+              ? "Polling…"
+              : ps === "error"
+              ? "Error"
+              : typeof ps === "object"
+              ? ps.inserted > 0 ? `✓ ${ps.inserted} new` : "✓ Up to date"
+              : "↻ Poll now";
+            const canPoll = s.key === "google_alerts" || s.key === "hackernews" || s.key === "reddit";
+
             return (
               <div key={s.key} className={cx("scard", `scard-${tone}`)}>
                 <div className="scard-head">
@@ -152,7 +206,7 @@ export default function SourcesPage() {
                   </div>
                   <div className={cx("status-pill", `status-${tone}`)}>
                     <Dot color={`var(--${tone})`} pulse={tone === "ok"} />
-                    {status === "active" ? "Active" : (status as string) === "degraded" ? "Degraded" : "Not configured"}
+                    {status === "active" ? "Active" : status === "degraded" ? "Degraded" : "Not configured"}
                   </div>
                 </div>
 
@@ -169,37 +223,20 @@ export default function SourcesPage() {
                 <div className="scard-stats">
                   <div>
                     <div className="scard-stat-label">Today</div>
-                    <div className="scard-stat-value">
-                      {s.key === "google_alerts" ? (gaStats ? gaStats.today : "—")
-                        : s.key === "hackernews" ? (hnStats ? hnStats.today : "—")
-                        : "—"}
-                    </div>
+                    <div className="scard-stat-value">{statsToday}</div>
                   </div>
                   <div>
                     <div className="scard-stat-label">7 days</div>
-                    <div className="scard-stat-value">
-                      {s.key === "google_alerts" ? (gaStats ? gaStats.sevenDays : "—")
-                        : s.key === "hackernews" ? (hnStats ? hnStats.sevenDays : "—")
-                        : "—"}
-                    </div>
+                    <div className="scard-stat-value">{statsSevenDays}</div>
                   </div>
                   <div>
                     <div className="scard-stat-label">Last poll</div>
-                    <div className="scard-stat-value mono">
-                      {s.key === "google_alerts" ? relativeTime(gaStats?.lastPoll ?? null)
-                        : s.key === "hackernews" ? relativeTime(hnStats?.lastPoll ?? null)
-                        : "—"}
-                    </div>
+                    <div className="scard-stat-value mono">{statsLastPoll}</div>
                   </div>
                 </div>
 
                 <div className="scard-spark">
-                  <Sparkline
-                    values={spark}
-                    color={`var(--${tone})`}
-                    height={32}
-                    fill
-                  />
+                  <Sparkline values={spark} color={`var(--${tone})`} height={32} fill />
                   <span className="scard-spark-hint">24h ingest</span>
                 </div>
 
@@ -209,12 +246,7 @@ export default function SourcesPage() {
                     <div className="scard-env-list">
                       {s.requiresEnv.map((v) => (
                         <code key={v} className="codepill">
-                          <span
-                            className={cx(
-                              "env-dot",
-                              tone === "ok" ? "env-dot-ok" : "env-dot-err"
-                            )}
-                          />
+                          <span className={cx("env-dot", tone === "ok" ? "env-dot-ok" : "env-dot-err")} />
                           {v}
                         </code>
                       ))}
@@ -235,29 +267,59 @@ export default function SourcesPage() {
                   </div>
                 )}
 
-                <div className="scard-foot">
-                  {(s.key === "google_alerts" || s.key === "hackernews") ? (() => {
-                    const psKey = s.key === "google_alerts" ? "google_alerts" : "hackernews";
-                    const onPoll = s.key === "google_alerts" ? pollGoogleAlerts : pollHackerNews;
-                    const ps = pollStatus[psKey] ?? "idle";
-                    const polling = ps === "polling";
-                    const label = ps === "polling"
-                      ? "Polling…"
-                      : ps === "error"
-                      ? "Error"
-                      : typeof ps === "object"
-                      ? ps.inserted > 0 ? `✓ ${ps.inserted} new` : "✓ Up to date"
-                      : "↻ Poll now";
-                    return (
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={onPoll}
-                        disabled={polling}
-                      >
-                        {label}
+                {s.key === "reddit" && (
+                  <div className="scard-env">
+                    <div className="scard-env-label">Subreddits</div>
+                    {subreddits.length > 0 && (
+                      <div className="scard-env-list" style={{ marginBottom: 6 }}>
+                        {subreddits.map((name) => (
+                          <span key={name} className="codepill" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            r/{name}
+                            <button
+                              onClick={() => removeSubreddit(name)}
+                              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-40)", lineHeight: 1, padding: 0, fontSize: 12 }}
+                              aria-label={`Remove r/${name}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <input
+                        type="text"
+                        value={subredditInput}
+                        onChange={(e) => setSubredditInput(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && addSubreddit()}
+                        placeholder="subreddit name"
+                        style={{
+                          flex: 1,
+                          fontSize: 12,
+                          padding: "3px 8px",
+                          background: "var(--surface-1)",
+                          border: "1px solid var(--border)",
+                          borderRadius: 4,
+                          color: "var(--ink-100)",
+                        }}
+                      />
+                      <button className="btn btn-ghost btn-sm" onClick={addSubreddit}>
+                        Add
                       </button>
-                    );
-                  })() : (
+                    </div>
+                  </div>
+                )}
+
+                <div className="scard-foot">
+                  {canPoll ? (
+                    <button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => pollSource(s.key)}
+                      disabled={polling}
+                    >
+                      {pollLabel}
+                    </button>
+                  ) : (
                     <button className="btn btn-ghost btn-sm">↻ Poll now</button>
                   )}
                   <button className="btn btn-ghost btn-sm">View logs</button>

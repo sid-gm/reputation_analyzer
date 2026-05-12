@@ -53,7 +53,14 @@ export const ingestedItems = pgTable(
   (t) => [unique("platform_external_id_unique").on(t.platform, t.externalId)]
 );
 
+export const redditSubreddits = pgTable("reddit_subreddits", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  subredditName: text("subreddit_name").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type TrackedEntity = typeof trackedEntities.$inferSelect;
 export type NewTrackedEntity = typeof trackedEntities.$inferInsert;
 export type IngestedItem = typeof ingestedItems.$inferSelect;
 export type NewIngestedItem = typeof ingestedItems.$inferInsert;
+export type RedditSubreddit = typeof redditSubreddits.$inferSelect;

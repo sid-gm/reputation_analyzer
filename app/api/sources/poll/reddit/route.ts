@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
-import { verifyCronSecret } from "@/lib/cron-auth";
 import { getAllEntities, getAllSubreddits, upsertItems } from "@/lib/collectors/ingest";
 import { collectSubreddit, RedditClient } from "@/lib/collectors/reddit";
 
-export async function GET(req: Request) {
-  const authError = verifyCronSecret(req);
-  if (authError) return authError;
-
+export async function POST() {
   const subreddits = await getAllSubreddits();
   if (subreddits.length === 0) {
-    return NextResponse.json({ ok: true, inserted: 0, message: "No subreddits configured" });
+    return NextResponse.json({ ok: true, inserted: 0 });
   }
 
   const entities = await getAllEntities();
@@ -22,7 +18,7 @@ export async function GET(req: Request) {
       const inserted = await upsertItems(items);
       total += inserted;
     } catch (err) {
-      console.error(`[Reddit] subreddit r/${subredditName}:`, err);
+      console.error(`[Reddit poll] r/${subredditName}:`, err);
     }
   }
 
