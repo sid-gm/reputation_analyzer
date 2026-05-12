@@ -5,9 +5,11 @@ import { cx, Dot, PlatformChip, Sparkline } from "@/components/primitives";
 
 type EnvStatus = { hackernews: boolean; reddit: boolean; twitter: boolean };
 
-type GAStats = { today: number; sevenDays: number; lastPoll: string | null };
-type HNStats = { today: number; sevenDays: number; lastPoll: string | null };
-type RedditStats = { today: number; sevenDays: number; lastPoll: string | null };
+type SourceStats = { today: number; sevenDays: number; lastPoll: string | null };
+type GAStats = SourceStats;
+type HNStats = SourceStats;
+type RedditStats = SourceStats;
+type TwitterStats = SourceStats;
 
 function relativeTime(iso: string | null): string {
   if (!iso) return "—";
@@ -75,6 +77,7 @@ export default function SourcesPage() {
   const [gaStats, setGaStats] = useState<GAStats | null>(null);
   const [hnStats, setHnStats] = useState<HNStats | null>(null);
   const [redditStats, setRedditStats] = useState<RedditStats | null>(null);
+  const [twitterStats, setTwitterStats] = useState<TwitterStats | null>(null);
   const [subreddits, setSubreddits] = useState<string[]>([]);
   const [subredditInput, setSubredditInput] = useState("");
 
@@ -88,6 +91,7 @@ export default function SourcesPage() {
     fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
     fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
     fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
+    fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
     fetch("/api/subreddits")
       .then((r) => r.json())
       .then((rows: { subredditName: string }[]) =>
@@ -129,6 +133,7 @@ export default function SourcesPage() {
       key === "google_alerts" ? "/api/sources/poll/google-alerts"
       : key === "hackernews" ? "/api/sources/poll/hackernews"
       : key === "reddit" ? "/api/sources/poll/reddit"
+      : key === "twitter" ? "/api/sources/poll/twitter"
       : null;
     if (!endpoint) return;
 
@@ -139,6 +144,7 @@ export default function SourcesPage() {
       setPollStatus((s) => ({ ...s, [key]: { inserted: data.inserted ?? 0 } }));
       if (key === "hackernews") fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
       if (key === "reddit") fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
+      if (key === "twitter") fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
     } catch {
       setPollStatus((s) => ({ ...s, [key]: "error" }));
     }
@@ -175,16 +181,19 @@ export default function SourcesPage() {
               s.key === "google_alerts" ? (gaStats ? gaStats.today : "—")
               : s.key === "hackernews" ? (hnStats ? hnStats.today : "—")
               : s.key === "reddit" ? (redditStats ? redditStats.today : "—")
+              : s.key === "twitter" ? (twitterStats ? twitterStats.today : "—")
               : "—";
             const statsSevenDays =
               s.key === "google_alerts" ? (gaStats ? gaStats.sevenDays : "—")
               : s.key === "hackernews" ? (hnStats ? hnStats.sevenDays : "—")
               : s.key === "reddit" ? (redditStats ? redditStats.sevenDays : "—")
+              : s.key === "twitter" ? (twitterStats ? twitterStats.sevenDays : "—")
               : "—";
             const statsLastPoll =
               s.key === "google_alerts" ? relativeTime(gaStats?.lastPoll ?? null)
               : s.key === "hackernews" ? relativeTime(hnStats?.lastPoll ?? null)
               : s.key === "reddit" ? relativeTime(redditStats?.lastPoll ?? null)
+              : s.key === "twitter" ? relativeTime(twitterStats?.lastPoll ?? null)
               : "—";
 
             const ps = pollStatus[s.key] ?? "idle";
@@ -196,7 +205,7 @@ export default function SourcesPage() {
               : typeof ps === "object"
               ? ps.inserted > 0 ? `✓ ${ps.inserted} new` : "✓ Up to date"
               : "↻ Poll now";
-            const canPoll = s.key === "google_alerts" || s.key === "hackernews" || s.key === "reddit";
+            const canPoll = s.key === "google_alerts" || s.key === "hackernews" || s.key === "reddit" || s.key === "twitter";
 
             return (
               <div key={s.key} className={cx("scard", `scard-${tone}`)}>
