@@ -56,6 +56,7 @@ function pseudoSpark(seed: number): number[] {
 export default function SourcesPage() {
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
   const [alertCount, setAlertCount] = useState(0);
+  const [pollStatus, setPollStatus] = useState<Record<string, "idle" | "polling" | { inserted: number } | "error">>({});
 
   useEffect(() => {
     fetch("/api/sources/status").then((r) => r.json()).then(setEnvStatus);
@@ -75,6 +76,17 @@ export default function SourcesPage() {
       return envStatus?.twitter ? "active" : "offline";
     return "offline";
   };
+
+  async function pollGoogleAlerts() {
+    setPollStatus((s) => ({ ...s, google_alerts: "polling" }));
+    try {
+      const res = await fetch("/api/sources/poll/google-alerts", { method: "POST" });
+      const data = await res.json();
+      setPollStatus((s) => ({ ...s, google_alerts: { inserted: data.inserted ?? 0 } }));
+    } catch {
+      setPollStatus((s) => ({ ...s, google_alerts: "error" }));
+    }
+  }
 
   const now = new Date();
   const nextPollMin = 60 - now.getMinutes();
@@ -186,7 +198,28 @@ export default function SourcesPage() {
                 )}
 
                 <div className="scard-foot">
-                  <button className="btn btn-ghost btn-sm">↻ Poll now</button>
+                  {s.key === "google_alerts" ? (() => {
+                    const ps = pollStatus["google_alerts"] ?? "idle";
+                    const polling = ps === "polling";
+                    const label = ps === "polling"
+                      ? "Polling…"
+                      : ps === "error"
+                      ? "Error"
+                      : typeof ps === "object"
+                      ? ps.inserted > 0 ? `✓ ${ps.inserted} new` : "✓ Up to date"
+                      : "↻ Poll now";
+                    return (
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={pollGoogleAlerts}
+                        disabled={polling}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })() : (
+                    <button className="btn btn-ghost btn-sm">↻ Poll now</button>
+                  )}
                   <button className="btn btn-ghost btn-sm">View logs</button>
                 </div>
               </div>
