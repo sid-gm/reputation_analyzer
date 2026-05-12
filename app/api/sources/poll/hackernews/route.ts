@@ -20,10 +20,12 @@ export async function POST() {
         .from(ingestedItems)
         .where(and(eq(ingestedItems.platform, "hackernews"), eq(ingestedItems.entityId, entity.id)));
 
-      const hasRecentNews = row?.lastIngest && row.lastIngest > oneHourAgo;
-      const sinceTs = row?.lastPublished
-        ? Math.floor(row.lastPublished.getTime() / 1000)
-        : null;
+      // Drizzle max() on timestamps returns string with Neon HTTP driver — wrap in new Date()
+      const lastIngest = row?.lastIngest ? new Date(row.lastIngest) : null;
+      const lastPublished = row?.lastPublished ? new Date(row.lastPublished) : null;
+
+      const hasRecentNews = lastIngest && lastIngest > oneHourAgo;
+      const sinceTs = lastPublished ? Math.floor(lastPublished.getTime() / 1000) : null;
 
       const items =
         hasRecentNews && sinceTs
