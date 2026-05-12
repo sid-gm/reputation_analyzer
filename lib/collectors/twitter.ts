@@ -1,5 +1,26 @@
 import type { NewIngestedItem, TrackedEntity } from "@/lib/db/schema";
 
+// Sanitize a multi-platform queryString for Twitter API v2:
+// - Uppercase boolean operators (or → OR, and → AND, not → NOT)
+// - Strip bare :alias tokens (e.g. :sama) — HN-specific, invalid for Twitter
+// - Keep field:value tokens like from:handle, to:handle
+function toTwitterQuery(entity: TrackedEntity): string {
+  const tokens = entity.queryString
+    .split(/\s+/)
+    .map((token) => {
+      if (/^(or|and|not)$/i.test(token)) return token.toUpperCase();
+      if (/^:[a-zA-Z]/i.test(token)) return null; // strip :alias
+      return token;
+    })
+    .filter(Boolean) as string[];
+
+  // Remove dangling boolean operators at the boundaries
+  while (tokens.length > 0 && /^(OR|AND|NOT)$/.test(tokens[0])) tokens.shift();
+  while (tokens.length > 0 && /^(OR|AND)$/.test(tokens[tokens.length - 1])) tokens.pop();
+
+  return tokens.join(" ").trim() || entity.label;
+}
+
 interface Tweet {
   id: string;
   text: string;
@@ -17,9 +38,8 @@ interface TwitterUser {
 export async function collectTwitter(
   entity: TrackedEntity
 ): Promise<NewIngestedItem[]> {
-  // For executives, support "from:handle" syntax in queryString
   const query = encodeURIComponent(
-    `${entity.queryString} -is:retweet lang:en`
+    `${toTwitterQuery(entity)} -is:retweet lang:en`
   );
 
   const res = await fetch(

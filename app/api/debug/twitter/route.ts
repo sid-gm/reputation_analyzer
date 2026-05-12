@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
 import { getAllEntities } from "@/lib/collectors/ingest";
 
+function toTwitterQuery(qs: string, fallback: string): string {
+  const tokens = qs
+    .split(/\s+/)
+    .map((token) => {
+      if (/^(or|and|not)$/i.test(token)) return token.toUpperCase();
+      if (/^:[a-zA-Z]/i.test(token)) return null;
+      return token;
+    })
+    .filter(Boolean) as string[];
+  while (tokens.length > 0 && /^(OR|AND|NOT)$/.test(tokens[0])) tokens.shift();
+  while (tokens.length > 0 && /^(OR|AND)$/.test(tokens[tokens.length - 1])) tokens.pop();
+  return tokens.join(" ").trim() || fallback;
+}
+
 export async function GET() {
   const hasToken = !!process.env.TWITTER_BEARER_TOKEN;
   const tokenPreview = process.env.TWITTER_BEARER_TOKEN
@@ -11,7 +25,8 @@ export async function GET() {
 
   const results = await Promise.all(
     entities.map(async (entity) => {
-      const rawQuery = `${entity.queryString} -is:retweet lang:en`;
+      const sanitizedQuery = toTwitterQuery(entity.queryString, entity.label);
+      const rawQuery = `${sanitizedQuery} -is:retweet lang:en`;
       const query = encodeURIComponent(rawQuery);
       const url = `https://api.twitter.com/2/tweets/search/recent?query=${query}&max_results=10&tweet.fields=created_at,author_id&expansions=author_id&user.fields=username,name`;
 
@@ -24,6 +39,7 @@ export async function GET() {
           entityId: entity.id,
           label: entity.label,
           queryString: entity.queryString,
+          sanitizedQuery,
           rawQuery,
           httpStatus: res.status,
           tweetCount: body.data?.length ?? 0,
