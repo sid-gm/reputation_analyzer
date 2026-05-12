@@ -57,6 +57,7 @@ export async function GET(req: Request) {
             clusterId: clusterItems.clusterId,
             similarity: clusterItems.similarity,
             title: ingestedItems.title,
+            body: ingestedItems.body,
             url: ingestedItems.url,
             platform: ingestedItems.platform,
             publishedAt: ingestedItems.publishedAt,
@@ -76,7 +77,8 @@ export async function GET(req: Request) {
   const result = allClusters.map((cluster) => {
     const items = itemsByCluster.get(cluster.id) ?? [];
     const platforms = [...new Set(items.map((i) => i.platform))];
-    return { ...cluster, topItems: items.slice(0, 3), platforms };
+    const displayable = items.filter((i) => i.title || i.body || i.url);
+    return { ...cluster, topItems: displayable.slice(0, 3), platforms };
   });
 
   try {

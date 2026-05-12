@@ -7,6 +7,7 @@ type ClusterItem = {
   clusterId: string;
   similarity: number;
   title: string | null;
+  body: string | null;
   url: string | null;
   platform: string;
   publishedAt: string | null;
@@ -228,10 +229,10 @@ export default function ClustersPage() {
                         <span className="cluster-item-title">
                           {item.url ? (
                             <a href={item.url} target="_blank" rel="noopener noreferrer">
-                              {item.title ?? item.url}
+                              {item.title ?? item.body?.slice(0, 120) ?? item.url}
                             </a>
                           ) : (
-                            item.title ?? "—"
+                            item.title ?? item.body?.slice(0, 120) ?? "—"
                           )}
                         </span>
                         <Dot color={simColor(item.similarity)} size={7} />
