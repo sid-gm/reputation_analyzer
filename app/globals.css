@@ -212,8 +212,8 @@ input, select, textarea { font: inherit; color: inherit; }
 
 .codepill { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; background: var(--ink-10); border: 1px solid var(--border-soft); border-radius: 3px; color: var(--ink-80); }
 .subtype-chip { display: inline-flex; align-items: center; font-size: 10px; font-family: var(--font-mono); padding: 1px 5px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; }
-.subtype-story   { background: oklch(0.25 0.04 200 / 0.4); color: oklch(0.75 0.1 200); border: 1px solid oklch(0.4 0.08 200 / 0.4); }
-.subtype-comment { background: oklch(0.25 0.06 50 / 0.4);  color: oklch(0.78 0.12 50);  border: 1px solid oklch(0.4 0.1 50 / 0.4); }
+.subtype-story   { background: oklch(0.35 0.08 200); color: #fff; border: 1px solid oklch(0.5 0.1 200); }
+.subtype-comment { background: oklch(0.38 0.1 50);  color: #fff; border: 1px solid oklch(0.55 0.14 50); }
 
 /* KPI row */
 .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
