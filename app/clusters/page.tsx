@@ -33,6 +33,16 @@ type Stats = {
 
 type Entity = { id: string; label: string };
 
+function cleanTitle(raw: string | null): string | null {
+  if (!raw) return null;
+  return raw
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, c) => String.fromCharCode(Number(c)))
+    .trim() || null;
+}
+
 function simColor(sim: number): string {
   if (sim >= 0.92) return "var(--ok)";
   if (sim >= 0.86) return "var(--accent)";
@@ -229,10 +239,10 @@ export default function ClustersPage() {
                         <span className="cluster-item-title">
                           {item.url ? (
                             <a href={item.url} target="_blank" rel="noopener noreferrer">
-                              {item.title ?? item.body?.slice(0, 120) ?? item.url}
+                              {cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? item.url}
                             </a>
                           ) : (
-                            item.title ?? item.body?.slice(0, 120) ?? "—"
+                            cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? "—"
                           )}
                         </span>
                         <Dot color={simColor(item.similarity)} size={7} />
@@ -242,7 +252,10 @@ export default function ClustersPage() {
                 )}
 
                 <div className="cluster-card-foot">
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-40)" }}>
+                      sources
+                    </span>
                     {cluster.platforms.map((p) => (
                       <PlatformChip key={p} platform={p} size="sm" />
                     ))}
