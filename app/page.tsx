@@ -249,7 +249,7 @@ function FeedRow({ item, entities }: { item: FeedItem; entities: Entity[] }) {
       <div className="feedrow-rail" />
       <div className="feedrow-left">
         <PlatformChip platform={item.platform} />
-        {item.platform === "hackernews" && item.subtype && (
+        {item.platform === "hackernews" && (
           <span className={cx("subtype-chip", item.subtype === "comment" ? "subtype-comment" : "subtype-story")}>
             {item.subtype === "comment" ? "Comment" : "Story"}
           </span>
@@ -314,7 +314,7 @@ function FeedTable({ items, entities }: { items: FeedItem[]; entities: Entity[] 
               <tr key={i.id}>
                 <td>
                   <PlatformChip platform={i.platform} />
-                  {i.platform === "hackernews" && i.subtype && (
+                  {i.platform === "hackernews" && (
                     <span className={cx("subtype-chip", i.subtype === "comment" ? "subtype-comment" : "subtype-story")}>
                       {i.subtype === "comment" ? "Cmt" : "Str"}
                     </span>
