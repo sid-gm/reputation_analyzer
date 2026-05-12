@@ -47,6 +47,7 @@ export const ingestedItems = pgTable(
     author: text("author"),
     publishedAt: timestamp("published_at"),
     rawJson: jsonb("raw_json"),
+    subtype: text("subtype"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [unique("platform_external_id_unique").on(t.platform, t.externalId)]

@@ -16,6 +16,7 @@ type FeedItem = {
   body: string | null;
   author: string | null;
   publishedAt: string | null;
+  subtype: string | null;
   createdAt: string;
 };
 
@@ -248,6 +249,11 @@ function FeedRow({ item, entities }: { item: FeedItem; entities: Entity[] }) {
       <div className="feedrow-rail" />
       <div className="feedrow-left">
         <PlatformChip platform={item.platform} />
+        {item.platform === "hackernews" && item.subtype && (
+          <span className={cx("subtype-chip", item.subtype === "comment" ? "subtype-comment" : "subtype-story")}>
+            {item.subtype === "comment" ? "Comment" : "Story"}
+          </span>
+        )}
         <div className="feedrow-time">{relativeTime(item.publishedAt ?? item.createdAt)}</div>
       </div>
       <div className="feedrow-body">
@@ -306,7 +312,14 @@ function FeedTable({ items, entities }: { items: FeedItem[]; entities: Entity[] 
             const ent = entities.find((e) => e.id === i.entityId);
             return (
               <tr key={i.id}>
-                <td><PlatformChip platform={i.platform} /></td>
+                <td>
+                  <PlatformChip platform={i.platform} />
+                  {i.platform === "hackernews" && i.subtype && (
+                    <span className={cx("subtype-chip", i.subtype === "comment" ? "subtype-comment" : "subtype-story")}>
+                      {i.subtype === "comment" ? "Cmt" : "Str"}
+                    </span>
+                  )}
+                </td>
                 <td className="mono dim">{relativeTime(i.publishedAt ?? i.createdAt)}</td>
                 <td className="tbl-title">
                   {i.url ? (

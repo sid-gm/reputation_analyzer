@@ -25,11 +25,20 @@ interface HNHit {
   title?: string;
   story_text?: string;
   comment_text?: string;
+  story_title?: string;
+  story_id?: number;
   url?: string;
   author: string;
   created_at: string;
   _tags: string[];
   [key: string]: unknown;
+}
+
+async function fetchHits(url: string): Promise<HNHit[]> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HN API error: ${res.status}`);
+  const data = (await res.json()) as { hits: HNHit[] };
+  return data.hits;
 }
 
 export async function collectHackerNews(
@@ -38,23 +47,41 @@ export async function collectHackerNews(
 ): Promise<NewIngestedItem[]> {
   const limit = opts?.limit ?? 20;
   const query = encodeURIComponent(toHNQuery(entity));
-  let url = `https://hn.algolia.com/api/v1/search_by_date?query=${query}&hitsPerPage=${limit}&tags=story`;
-  if (opts?.since) url += `&numericFilters=created_at_i%3E${opts.since}`;
+  const sinceParam = opts?.since ? `&numericFilters=created_at_i%3E${opts.since}` : "";
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HN API error: ${res.status}`);
+  const storyUrl = `https://hn.algolia.com/api/v1/search_by_date?query=${query}&hitsPerPage=${limit}&tags=story${sinceParam}`;
+  const commentUrl = `https://hn.algolia.com/api/v1/search_by_date?query=${query}&hitsPerPage=${limit}&tags=comment${sinceParam}`;
 
-  const data = (await res.json()) as { hits: HNHit[] };
+  const [stories, comments] = await Promise.all([
+    fetchHits(storyUrl),
+    fetchHits(commentUrl),
+  ]);
 
-  return data.hits.map((hit) => ({
+  const storyItems: NewIngestedItem[] = stories.map((hit) => ({
     entityId: entity.id,
     platform: "hackernews" as const,
     externalId: hit.objectID,
     url: hit.url ?? `https://news.ycombinator.com/item?id=${hit.objectID}`,
     title: hit.title ?? null,
-    body: hit.comment_text ?? hit.story_text ?? null,
+    body: hit.story_text ?? null,
     author: hit.author,
     publishedAt: new Date(hit.created_at),
+    subtype: "story",
     rawJson: hit,
   }));
+
+  const commentItems: NewIngestedItem[] = comments.map((hit) => ({
+    entityId: entity.id,
+    platform: "hackernews" as const,
+    externalId: hit.objectID,
+    url: `https://news.ycombinator.com/item?id=${hit.objectID}`,
+    title: hit.story_title ?? null,
+    body: hit.comment_text ?? null,
+    author: hit.author,
+    publishedAt: new Date(hit.created_at),
+    subtype: "comment",
+    rawJson: hit,
+  }));
+
+  return [...storyItems, ...commentItems];
 }

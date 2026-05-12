@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       body: ingestedItems.body,
       author: ingestedItems.author,
       publishedAt: ingestedItems.publishedAt,
+      subtype: ingestedItems.subtype,
       createdAt: ingestedItems.createdAt,
     })
     .from(ingestedItems)
