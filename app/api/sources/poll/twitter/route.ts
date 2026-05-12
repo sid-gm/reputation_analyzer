@@ -5,6 +5,7 @@ import { collectTwitter } from "@/lib/collectors/twitter";
 export async function POST() {
   const entities = await getAllEntities();
   let total = 0;
+  const errors: { entityId: string; label: string; error: string }[] = [];
 
   for (const entity of entities) {
     try {
@@ -12,9 +13,11 @@ export async function POST() {
       const inserted = await upsertItems(items);
       total += inserted;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error(`[Twitter:poll] entity ${entity.id}:`, err);
+      errors.push({ entityId: entity.id, label: entity.label, error: msg });
     }
   }
 
-  return NextResponse.json({ ok: true, inserted: total });
+  return NextResponse.json({ ok: errors.length === 0, inserted: total, errors });
 }
