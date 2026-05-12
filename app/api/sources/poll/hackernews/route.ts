@@ -13,16 +13,22 @@ export async function POST() {
   for (const entity of entities) {
     try {
       const [row] = await db
-        .select({ lastPoll: max(ingestedItems.createdAt) })
+        .select({
+          lastIngest: max(ingestedItems.createdAt),
+          lastPublished: max(ingestedItems.publishedAt),
+        })
         .from(ingestedItems)
         .where(and(eq(ingestedItems.platform, "hackernews"), eq(ingestedItems.entityId, entity.id)));
 
-      const lastPoll = row?.lastPoll ?? null;
-      const hasRecentNews = lastPoll && lastPoll > oneHourAgo;
+      const hasRecentNews = row?.lastIngest && row.lastIngest > oneHourAgo;
+      const sinceTs = row?.lastPublished
+        ? Math.floor(row.lastPublished.getTime() / 1000)
+        : null;
 
-      const items = hasRecentNews
-        ? await collectHackerNews(entity, { since: Math.floor(lastPoll.getTime() / 1000) })
-        : await collectHackerNews(entity, { limit: 5 });
+      const items =
+        hasRecentNews && sinceTs
+          ? await collectHackerNews(entity, { since: sinceTs })
+          : await collectHackerNews(entity, { limit: 5 });
 
       const inserted = await upsertItems(items);
       total += inserted;
