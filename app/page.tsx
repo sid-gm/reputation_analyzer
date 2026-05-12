@@ -49,6 +49,26 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState(50);
   const [page, setPage] = useState(1);
+  const [embedRunning, setEmbedRunning] = useState(false);
+  const [embedResult, setEmbedResult] = useState<string | null>(null);
+
+  const runEmbed = useCallback(async () => {
+    setEmbedRunning(true);
+    setEmbedResult(null);
+    try {
+      const res = await fetch("/api/run/embed", { method: "POST" });
+      const data = await res.json();
+      setEmbedResult(
+        data.embedded === 0
+          ? "nothing to embed"
+          : `${data.embedded} embedded${data.hasMore ? " · more pending" : " · all done"}`
+      );
+    } catch {
+      setEmbedResult("error — check console");
+    } finally {
+      setEmbedRunning(false);
+    }
+  }, []);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -110,6 +130,20 @@ export default function FeedPage() {
             />
             <span className="kbd kbd-soft">/</span>
           </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              className="btn"
+              onClick={runEmbed}
+              disabled={embedRunning}
+            >
+              {embedRunning ? "Embedding…" : "Run Embed"}
+            </button>
+            {embedResult && (
+              <span style={{ fontSize: 12, color: "var(--ink-40)", whiteSpace: "nowrap" }}>
+                {embedResult}
+              </span>
+            )}
+          </div>
           <a href="/submit" className="btn btn-primary">+ Submit</a>
         </div>
       </header>
