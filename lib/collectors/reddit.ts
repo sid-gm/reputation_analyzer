@@ -1,17 +1,13 @@
 import type { NewIngestedItem, TrackedEntity } from "@/lib/db/schema";
+import type { RedditPost } from "./reddit-client";
 import { RedditClient } from "./reddit-client";
 
 export { RedditClient };
 
-export async function collectSubreddit(
-  subredditName: string,
-  entities: TrackedEntity[],
-  reddit: RedditClient
-): Promise<NewIngestedItem[]> {
-  const posts = await reddit
-    .getNewPosts({ subredditName, limit: 100, pageSize: 100 })
-    .all();
-
+function matchPosts(
+  posts: RedditPost[],
+  entities: TrackedEntity[]
+): NewIngestedItem[] {
   const items: NewIngestedItem[] = [];
   const seen = new Set<string>();
 
@@ -42,4 +38,25 @@ export async function collectSubreddit(
   }
 
   return items;
+}
+
+export async function collectAllSubreddits(
+  subredditNames: string[],
+  entities: TrackedEntity[],
+  reddit: RedditClient
+): Promise<NewIngestedItem[]> {
+  if (subredditNames.length === 0) return [];
+  const posts = await reddit
+    .getBatchNewPosts({ subreddits: subredditNames, limit: 100 })
+    .all();
+  return matchPosts(posts, entities);
+}
+
+// Single-subreddit variant kept for compatibility
+export async function collectSubreddit(
+  subredditName: string,
+  entities: TrackedEntity[],
+  reddit: RedditClient
+): Promise<NewIngestedItem[]> {
+  return collectAllSubreddits([subredditName], entities, reddit);
 }

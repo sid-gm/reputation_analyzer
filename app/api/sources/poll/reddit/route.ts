@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAllEntities, getAllSubreddits, upsertItems } from "@/lib/collectors/ingest";
-import { collectSubreddit, RedditClient } from "@/lib/collectors/reddit";
+import { collectAllSubreddits, RedditClient } from "@/lib/collectors/reddit";
 
 export async function POST() {
   const subreddits = await getAllSubreddits();
@@ -8,19 +8,17 @@ export async function POST() {
     return NextResponse.json({ ok: true, inserted: 0 });
   }
 
-  const entities = await getAllEntities();
-  const reddit = await RedditClient.create();
-  let total = 0;
+  const [entities, reddit] = await Promise.all([
+    getAllEntities(),
+    Promise.resolve(RedditClient.create()),
+  ]);
 
-  for (const { subredditName } of subreddits) {
-    try {
-      const items = await collectSubreddit(subredditName, entities, reddit);
-      const inserted = await upsertItems(items);
-      total += inserted;
-    } catch (err) {
-      console.error(`[Reddit poll] r/${subredditName}:`, err);
-    }
-  }
+  const items = await collectAllSubreddits(
+    subreddits.map((s) => s.subredditName),
+    entities,
+    reddit
+  );
+  const inserted = await upsertItems(items);
 
-  return NextResponse.json({ ok: true, inserted: total });
+  return NextResponse.json({ ok: true, inserted });
 }

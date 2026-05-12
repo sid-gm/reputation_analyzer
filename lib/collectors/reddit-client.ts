@@ -19,6 +19,27 @@ export interface RedditPost {
 }
 
 const APIFY_BASE = "https://api.apify.com/v2";
+const ACTOR = "spry_wholemeal~reddit-scraper";
+
+async function runApifyScrape(
+  subreddits: string[],
+  maxPostsPerSubreddit: number,
+  token: string
+): Promise<RedditPost[]> {
+  const res = await fetch(
+    `${APIFY_BASE}/acts/${ACTOR}/run-sync-get-dataset-items?token=${token}&timeout=120&memory=512`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mode: "scrape",
+        scrape: { subreddits, sort: "new", maxPostsPerSubreddit },
+      }),
+    }
+  );
+  if (!res.ok) throw new Error(`Apify error: ${res.status} ${await res.text()}`);
+  return res.json() as Promise<RedditPost[]>;
+}
 
 class RedditPostQuery {
   constructor(
@@ -28,24 +49,19 @@ class RedditPostQuery {
   ) {}
 
   async all(): Promise<RedditPost[]> {
-    const res = await fetch(
-      `${APIFY_BASE}/acts/spry_wholemeal~reddit-scraper/run-sync-get-dataset-items?token=${this.token}&timeout=120&memory=512`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "scrape",
-          scrape: {
-            subreddits: [this.subredditName],
-            sort: "new",
-            maxPostsPerSubreddit: this.limit,
-          },
-        }),
-      }
-    );
+    return runApifyScrape([this.subredditName], this.limit, this.token);
+  }
+}
 
-    if (!res.ok) throw new Error(`Apify error: ${res.status}`);
-    return res.json() as Promise<RedditPost[]>;
+class BatchRedditPostQuery {
+  constructor(
+    private subreddits: string[],
+    private limit: number,
+    private token: string
+  ) {}
+
+  async all(): Promise<RedditPost[]> {
+    return runApifyScrape(this.subreddits, this.limit, this.token);
   }
 }
 
@@ -64,5 +80,9 @@ export class RedditClient {
     pageSize: number;
   }): RedditPostQuery {
     return new RedditPostQuery(params.subredditName, params.limit, this.token);
+  }
+
+  getBatchNewPosts(params: { subreddits: string[]; limit: number }): BatchRedditPostQuery {
+    return new BatchRedditPostQuery(params.subreddits, params.limit, this.token);
   }
 }
