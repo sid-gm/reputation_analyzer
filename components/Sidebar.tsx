@@ -57,13 +57,13 @@ export function Sidebar() {
           );
         })}
 
+        <div className="nav-section" style={{ marginTop: 16 }}>Clusters</div>
         <Link
           href="/clusters"
-          className={cx("nav-item", path.startsWith("/clusters") && "nav-item-on")}
-          style={{ marginTop: 4 }}
+          className={cx("nav-item nav-item-sub", path.startsWith("/clusters") && "nav-item-on")}
         >
           <span className="nav-glyph">◎</span>
-          <span className="nav-label">Clusters</span>
+          <span className="nav-label">Cluster Review</span>
         </Link>
 
         <div className="nav-section" style={{ marginTop: 16 }}>
