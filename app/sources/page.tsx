@@ -39,7 +39,7 @@ const SOURCE_DEFS: SourceDef[] = [
     key: "reddit",
     name: "Reddit",
     desc: "OAuth2 client credentials flow. Fetches new posts from configured subreddits and matches against tracked entity keywords.",
-    requiresEnv: ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
+    requiresEnv: ["APIFY_TOKEN"],
   },
   {
     key: "twitter",

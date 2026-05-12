@@ -1,85 +1,60 @@
 export interface RedditPost {
-  id: string;
+  post_id: string;
   title: string;
-  selftext: string;
+  text: string;
   url: string;
-  author: string;
-  created_utc: number;
   permalink: string;
+  author: string;
+  subreddit: string;
+  created_utc_iso: string;
+  score: number;
+  upvote_ratio: number;
+  num_comments: number;
+  engagement_level: string;
+  score_per_hour: number;
+  comments_per_hour: number;
+  link_flair_text: string | null;
+  is_controversial: boolean;
   [key: string]: unknown;
 }
 
-async function getRedditToken(): Promise<string> {
-  const credentials = Buffer.from(
-    `${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`
-  ).toString("base64");
-
-  const res = await fetch("https://www.reddit.com/api/v1/access_token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "STNAnalyzer/1.0",
-    },
-    body: "grant_type=client_credentials",
-  });
-
-  if (!res.ok) throw new Error(`Reddit auth error: ${res.status}`);
-  const data = (await res.json()) as { access_token: string };
-  return data.access_token;
-}
+const APIFY_BASE = "https://api.apify.com/v2";
 
 class RedditPostQuery {
   constructor(
     private subredditName: string,
     private limit: number,
-    private pageSize: number,
     private token: string
   ) {}
 
   async all(): Promise<RedditPost[]> {
-    const results: RedditPost[] = [];
-    let after: string | undefined;
-
-    while (results.length < this.limit) {
-      const batchSize = Math.min(this.pageSize, this.limit - results.length, 100);
-      const params = new URLSearchParams({
-        limit: String(batchSize),
-        ...(after ? { after } : {}),
-      });
-
-      const res = await fetch(
-        `https://oauth.reddit.com/r/${this.subredditName}/new?${params}`,
-        {
-          headers: {
-            Authorization: `Bearer ${this.token}`,
-            "User-Agent": "STNAnalyzer/1.0",
+    const res = await fetch(
+      `${APIFY_BASE}/acts/spry_wholemeal~reddit-scraper/run-sync-get-dataset-items?token=${this.token}&timeout=120&memory=512`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "scrape",
+          scrape: {
+            subreddits: [this.subredditName],
+            sort: "new",
+            maxPostsPerSubreddit: this.limit,
           },
-        }
-      );
+        }),
+      }
+    );
 
-      if (!res.ok) throw new Error(`Reddit API error: ${res.status}`);
-
-      const data = (await res.json()) as {
-        data: { children: Array<{ data: RedditPost }>; after: string | null };
-      };
-
-      const posts = data.data.children.map((c) => c.data);
-      results.push(...posts);
-      after = data.data.after ?? undefined;
-
-      if (!after || posts.length === 0) break;
-    }
-
-    return results.slice(0, this.limit);
+    if (!res.ok) throw new Error(`Apify error: ${res.status}`);
+    return res.json() as Promise<RedditPost[]>;
   }
 }
 
 export class RedditClient {
   private constructor(private token: string) {}
 
-  static async create(): Promise<RedditClient> {
-    const token = await getRedditToken();
+  static create(): RedditClient {
+    const token = process.env.APIFY_TOKEN;
+    if (!token) throw new Error("APIFY_TOKEN env var is not set");
     return new RedditClient(token);
   }
 
@@ -88,11 +63,6 @@ export class RedditClient {
     limit: number;
     pageSize: number;
   }): RedditPostQuery {
-    return new RedditPostQuery(
-      params.subredditName,
-      params.limit,
-      params.pageSize,
-      this.token
-    );
+    return new RedditPostQuery(params.subredditName, params.limit, this.token);
   }
 }
