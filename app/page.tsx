@@ -61,7 +61,7 @@ export default function FeedPage() {
       setEmbedResult(
         data.embedded === 0
           ? "nothing to embed"
-          : `${data.embedded} embedded${data.hasMore ? " · more pending" : " · all done"}`
+          : `${data.embedded} embedded · all done`
       );
     } catch {
       setEmbedResult("error — check console");

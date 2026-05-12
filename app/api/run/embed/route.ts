@@ -2,42 +2,51 @@ import { NextResponse } from "next/server";
 import { eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { ingestedItems } from "@/lib/db/schema";
-import { embedText } from "@/lib/ai/embed";
+import { embedAll } from "@/lib/ai/embed";
 
-const BATCH_SIZE = 50;
+const DB_CONCURRENCY = 20;
 
 export async function POST() {
   const pending = await db
     .select({ id: ingestedItems.id, title: ingestedItems.title, body: ingestedItems.body })
     .from(ingestedItems)
-    .where(isNull(ingestedItems.embedding))
-    .limit(BATCH_SIZE);
+    .where(isNull(ingestedItems.embedding));
 
-  let embedded = 0;
-  let skipped = 0;
-
-  for (const item of pending) {
+  const embeddable = pending.filter((item) => {
     const text = [item.title, item.body].filter(Boolean).join(" ").trim();
-    if (!text) { skipped++; continue; }
-    try {
-      const embedding = await embedText(text);
-      await db.update(ingestedItems).set({ embedding }).where(eq(ingestedItems.id, item.id));
-      embedded++;
-    } catch (err) {
-      console.error(`[run/embed] item ${item.id}:`, err);
-    }
+    return text.length > 0;
+  });
+
+  if (embeddable.length === 0) {
+    return NextResponse.json({ ok: true, embedded: 0, skipped: pending.length });
   }
 
-  const remaining = await db
-    .select({ id: ingestedItems.id })
-    .from(ingestedItems)
-    .where(isNull(ingestedItems.embedding))
-    .limit(1);
+  const texts = embeddable.map((item) =>
+    [item.title, item.body].filter(Boolean).join(" ").trim()
+  );
 
-  return NextResponse.json({
-    ok: true,
-    embedded,
-    skipped,
-    hasMore: remaining.length > 0,
-  });
+  try {
+    const embeddings = await embedAll(texts);
+
+    for (let i = 0; i < embeddable.length; i += DB_CONCURRENCY) {
+      await Promise.all(
+        embeddable.slice(i, i + DB_CONCURRENCY).map((item, j) =>
+          db
+            .update(ingestedItems)
+            .set({ embedding: embeddings[i + j] })
+            .where(eq(ingestedItems.id, item.id))
+        )
+      );
+    }
+
+    console.log(`[run/embed] embedded ${embeddable.length}, skipped ${pending.length - embeddable.length}`);
+    return NextResponse.json({
+      ok: true,
+      embedded: embeddable.length,
+      skipped: pending.length - embeddable.length,
+    });
+  } catch (err) {
+    console.error("[run/embed]", err);
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 });
+  }
 }
