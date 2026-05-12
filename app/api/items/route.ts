@@ -7,7 +7,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform");
   const entityId = searchParams.get("entityId");
-  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 100);
+  const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 500);
   const offset = parseInt(searchParams.get("offset") ?? "0");
 
   const conditions: SQL[] = [];

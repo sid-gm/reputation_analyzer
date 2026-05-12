@@ -88,15 +88,22 @@ export default function SourcesPage() {
       .then((entities: { googleAlertsFeedUrl: string | null }[]) =>
         setAlertCount(entities.filter((e) => e.googleAlertsFeedUrl).length)
       );
-    fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
-    fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
-    fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
-    fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
     fetch("/api/subreddits")
       .then((r) => r.json())
       .then((rows: { subredditName: string }[]) =>
         setSubreddits(rows.map((r) => r.subredditName))
       );
+
+    const refreshStats = () => {
+      fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
+      fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
+      fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
+      fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
+    };
+
+    refreshStats();
+    const interval = setInterval(refreshStats, 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   async function addSubreddit() {

@@ -47,10 +47,12 @@ export default function FeedPage() {
   const [query, setQuery] = useState("");
   const [view, setView] = useState<"list" | "table">("list");
   const [loading, setLoading] = useState(true);
+  const [pageSize, setPageSize] = useState(50);
+  const [page, setPage] = useState(1);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ limit: "100" });
+    const params = new URLSearchParams({ limit: "500" });
     if (platform !== "all") params.set("platform", platform);
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/items?${params}`);
@@ -62,9 +64,10 @@ export default function FeedPage() {
     fetch("/api/entities").then((r) => r.json()).then(setEntities);
   }, []);
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchItems(); setPage(1); }, [fetchItems]);
 
   const filtered = useMemo(() => {
+    setPage(1);
     if (!query) return items;
     const q = query.toLowerCase();
     return items.filter(
@@ -74,6 +77,10 @@ export default function FeedPage() {
         i.author?.toLowerCase().includes(q)
     );
   }, [items, query]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: items.length };
@@ -210,9 +217,25 @@ export default function FeedPage() {
         </div>
 
         <div className="result-meta">
-          <span><strong>{filtered.length}</strong> of {items.length} items</span>
+          <span>
+            <strong>{filtered.length}</strong> of {items.length} items
+          </span>
           <span className="dim">·</span>
           <span className="dim">Deduplicated on ingest · sorted by recency</span>
+          <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+            <span className="dim">Show</span>
+            <div className="seg">
+              {[25, 50, 100].map((n) => (
+                <button
+                  key={n}
+                  className={cx("seg-btn", pageSize === n && "seg-btn-on")}
+                  onClick={() => { setPageSize(n); setPage(1); }}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+          </span>
         </div>
 
         {loading ? (
@@ -221,9 +244,31 @@ export default function FeedPage() {
             <div className="empty-title">Loading feed</div>
           </div>
         ) : view === "list" ? (
-          <FeedList items={filtered} entities={entities} />
+          <FeedList items={paginated} entities={entities} />
         ) : (
-          <FeedTable items={filtered} entities={entities} />
+          <FeedTable items={paginated} entities={entities} />
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <div className="result-meta" style={{ marginTop: 12, justifyContent: "center", gap: 12 }}>
+            <button
+              className="btn btn-sm"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              ← Prev
+            </button>
+            <span>
+              Page <strong>{safePage}</strong> of <strong>{totalPages}</strong>
+            </span>
+            <button
+              className="btn btn-sm"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next →
+            </button>
+          </div>
         )}
       </div>
     </>
