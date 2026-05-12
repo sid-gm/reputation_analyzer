@@ -5,6 +5,19 @@ import { cx, Dot, PlatformChip, Sparkline } from "@/components/primitives";
 
 type EnvStatus = { hackernews: boolean; reddit: boolean; twitter: boolean };
 
+type GAStats = { today: number; sevenDays: number; lastPoll: string | null };
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 type SourceDef = {
   key: string;
   name: string;
@@ -57,6 +70,7 @@ export default function SourcesPage() {
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
   const [alertCount, setAlertCount] = useState(0);
   const [pollStatus, setPollStatus] = useState<Record<string, "idle" | "polling" | { inserted: number } | "error">>({});
+  const [gaStats, setGaStats] = useState<GAStats | null>(null);
 
   useEffect(() => {
     fetch("/api/sources/status").then((r) => r.json()).then(setEnvStatus);
@@ -65,6 +79,7 @@ export default function SourcesPage() {
       .then((entities: { googleAlertsFeedUrl: string | null }[]) =>
         setAlertCount(entities.filter((e) => e.googleAlertsFeedUrl).length)
       );
+    fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
   }, []);
 
   const isConnected = (key: string) => {
@@ -139,19 +154,21 @@ export default function SourcesPage() {
                 <div className="scard-stats">
                   <div>
                     <div className="scard-stat-label">Today</div>
-                    <div className="scard-stat-value">—</div>
+                    <div className="scard-stat-value">
+                      {s.key === "google_alerts" ? (gaStats ? gaStats.today : "—") : "—"}
+                    </div>
                   </div>
                   <div>
                     <div className="scard-stat-label">7 days</div>
-                    <div className="scard-stat-value">—</div>
-                  </div>
-                  <div>
-                    <div className="scard-stat-label">Latency</div>
-                    <div className="scard-stat-value mono">—</div>
+                    <div className="scard-stat-value">
+                      {s.key === "google_alerts" ? (gaStats ? gaStats.sevenDays : "—") : "—"}
+                    </div>
                   </div>
                   <div>
                     <div className="scard-stat-label">Last poll</div>
-                    <div className="scard-stat-value mono">—</div>
+                    <div className="scard-stat-value mono">
+                      {s.key === "google_alerts" ? relativeTime(gaStats?.lastPoll ?? null) : "—"}
+                    </div>
                   </div>
                 </div>
 
