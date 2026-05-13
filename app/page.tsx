@@ -53,6 +53,7 @@ export default function FeedPage() {
   const [embedResult, setEmbedResult] = useState<string | null>(null);
   const [clusterRunning, setClusterRunning] = useState(false);
   const [clusterResult, setClusterResult] = useState<string | null>(null);
+  const [platformCounts, setPlatformCounts] = useState<Record<string, number>>({ all: 0 });
 
   const runEmbed = useCallback(async () => {
     setEmbedRunning(true);
@@ -100,11 +101,19 @@ export default function FeedPage() {
     setLoading(false);
   }, [platform, entityId]);
 
+  const fetchCounts = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (entityId !== "all") params.set("entityId", entityId);
+    const res = await fetch(`/api/items/counts?${params}`);
+    setPlatformCounts(await res.json());
+  }, [entityId]);
+
   useEffect(() => {
     fetch("/api/entities").then((r) => r.json()).then(setEntities);
   }, []);
 
   useEffect(() => { fetchItems(); setPage(1); }, [fetchItems]);
+  useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
   const filtered = useMemo(() => {
     setPage(1);
@@ -122,12 +131,6 @@ export default function FeedPage() {
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: items.length };
-    for (const k of Object.keys(PLATFORMS)) c[k] = 0;
-    for (const i of items) c[i.platform] = (c[i.platform] ?? 0) + 1;
-    return c;
-  }, [items]);
 
   const spark1 = pseudoSpark(1);
   const spark2 = pseudoSpark(2);
@@ -178,7 +181,7 @@ export default function FeedPage() {
               <Sparkline values={spark1} color="var(--ink-40)" />
             </div>
             <div className="kpi-mid">
-              <div className="kpi-value">{items.length}</div>
+              <div className="kpi-value">{platformCounts.all}</div>
               <div className="kpi-delta kpi-delta-up">▲ ingested</div>
             </div>
           </div>
@@ -189,7 +192,7 @@ export default function FeedPage() {
             </div>
             <div className="kpi-mid">
               <div className="kpi-value">
-                {Object.keys(PLATFORMS).filter((k) => (counts[k] ?? 0) > 0).length}
+                {Object.keys(PLATFORMS).filter((k) => (platformCounts[k] ?? 0) > 0).length}
               </div>
               <div className="kpi-delta kpi-delta-flat">→ of 5</div>
             </div>
@@ -225,7 +228,7 @@ export default function FeedPage() {
                 className={cx("seg-btn", platform === "all" && "seg-btn-on")}
                 onClick={() => setPlatform("all")}
               >
-                All <span className="seg-count">{counts.all}</span>
+                All <span className="seg-count">{platformCounts.all}</span>
               </button>
               {Object.entries(PLATFORMS).map(([k, p]) => (
                 <button
@@ -238,7 +241,7 @@ export default function FeedPage() {
                     style={{ background: `oklch(0.62 0.16 ${p.hue})` }}
                   />
                   {p.label}{" "}
-                  <span className="seg-count">{counts[k] ?? 0}</span>
+                  <span className="seg-count">{platformCounts[k] ?? 0}</span>
                 </button>
               ))}
             </div>
