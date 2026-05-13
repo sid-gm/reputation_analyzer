@@ -6,7 +6,7 @@ import type { NewIngestedItem, TrackedEntity } from "@/lib/db/schema";
 function toHNQuery(entity: TrackedEntity): string {
   const qs = entity.queryString;
   const firstQuoted = qs.match(/"([^"]+)"/);
-  if (firstQuoted) return firstQuoted[1];
+  if (firstQuoted) return `"${firstQuoted[1]}"`;
   const cleaned = qs
     .split(/\s+/)
     .filter(
@@ -17,7 +17,10 @@ function toHNQuery(entity: TrackedEntity): string {
     )
     .join(" ")
     .trim();
-  return cleaned || entity.label;
+  const term = cleaned || entity.label;
+  // Wrap in quotes for exact match — prevents Algolia typo tolerance from
+  // matching near-misses (e.g. "codex" pulling in "code" results).
+  return `"${term}"`;
 }
 
 interface HNHit {
