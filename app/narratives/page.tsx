@@ -3,6 +3,14 @@
 import { useEffect, useState, useCallback } from "react";
 import { cx, PlatformChip, Dot } from "@/components/primitives";
 
+type MergeInfo = {
+  absorbedLabel: string | null;
+  absorbedFirstSeenAt: string;
+  absorbedLastSeenAt: string;
+  absorbedItemCount: number;
+  mergedAt: string;
+};
+
 type ClusterItem = {
   clusterId: string;
   itemId: string;
@@ -10,11 +18,17 @@ type ClusterItem = {
   itemSignal: string;
   analystSignal: string | null;
   signalReason: string | null;
+  mergeId: string | null;
   title: string | null;
   body: string | null;
   url: string | null;
   platform: string;
   publishedAt: string | null;
+};
+
+type ExpandedData = {
+  items: ClusterItem[];
+  merges: Record<string, MergeInfo>;
 };
 
 type Narrative = {
@@ -102,6 +116,18 @@ function SignalBadge({ signal }: { signal: string }) {
   );
 }
 
+function WaveHeader({ label, isFirst }: { label: string; isFirst: boolean }) {
+  return (
+    <div style={{
+      fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em",
+      color: "var(--ink-30)", padding: "5px 0 3px",
+      borderTop: isFirst ? "none" : "1px solid var(--border-soft)", marginTop: isFirst ? 0 : 6,
+    }}>
+      {label}
+    </div>
+  );
+}
+
 function ItemSignalOverride({
   clusterId,
   itemId,
@@ -155,7 +181,7 @@ export default function NarrativesPage() {
   const [stageFilter, setStageFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [expandedItems, setExpandedItems] = useState<Record<string, ClusterItem[]>>({});
+  const [expandedData, setExpandedData] = useState<Record<string, ExpandedData>>({});
   const [expandLoading, setExpandLoading] = useState<Set<string>>(new Set());
 
   const fetchNarratives = useCallback(async () => {
@@ -179,24 +205,88 @@ export default function NarrativesPage() {
 
   useEffect(() => { fetchNarratives(); }, [fetchNarratives]);
 
-  const loadItems = useCallback(async (narrativeId: string) => {
-    if (expandedItems[narrativeId]) return expandedItems[narrativeId];
+  const loadItems = useCallback(async (narrativeId: string): Promise<ExpandedData> => {
     setExpandLoading((prev) => new Set(prev).add(narrativeId));
     const res = await fetch(`/api/clusters/${narrativeId}/items`);
-    const items: ClusterItem[] = await res.json();
-    setExpandedItems((prev) => ({ ...prev, [narrativeId]: items }));
+    const data: ExpandedData = await res.json();
+    setExpandedData((prev) => ({ ...prev, [narrativeId]: data }));
     setExpandLoading((prev) => { const s = new Set(prev); s.delete(narrativeId); return s; });
-    return items;
-  }, [expandedItems]);
+    return data;
+  }, []);
+
+  const reloadItems = useCallback(async (narrativeId: string) => {
+    const res = await fetch(`/api/clusters/${narrativeId}/items`);
+    const data: ExpandedData = await res.json();
+    setExpandedData((prev) => ({ ...prev, [narrativeId]: data }));
+  }, []);
 
   const toggleExpand = useCallback(async (id: string) => {
     if (expandedIds.has(id)) {
       setExpandedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
     } else {
-      await loadItems(id);
+      if (!expandedData[id]) await loadItems(id);
       setExpandedIds((prev) => new Set(prev).add(id));
     }
-  }, [expandedIds, loadItems]);
+  }, [expandedIds, expandedData, loadItems]);
+
+  function renderItemRow(item: ClusterItem, i: number, narrativeId: string) {
+    const effectiveSignal = item.analystSignal ?? item.itemSignal;
+    return (
+      <div key={i} className="cluster-item-row" style={{ alignItems: "flex-start", gap: 6 }}>
+        <PlatformChip platform={item.platform} size="sm" />
+        <span className="cluster-item-title" style={{ flex: 1 }}>
+          {item.url ? (
+            <a href={item.url} target="_blank" rel="noopener noreferrer">
+              {cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? item.url}
+            </a>
+          ) : (
+            cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? "—"
+          )}
+        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+          <SignalBadge signal={effectiveSignal} />
+          <ItemSignalOverride
+            clusterId={narrativeId}
+            itemId={item.itemId}
+            current={item.analystSignal}
+            onDone={() => { fetchNarratives(); reloadItems(narrativeId); }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  function renderExpandedItems(narrative: Narrative) {
+    const data = expandedData[narrative.id];
+    if (!data) return null;
+    const { items, merges } = data;
+
+    const originalItems = items.filter((i) => !i.mergeId);
+    const mergeGroups = Object.entries(merges)
+      .map(([mergeId, merge]) => ({ mergeId, merge, items: items.filter((i) => i.mergeId === mergeId) }))
+      .filter((g) => g.items.length > 0)
+      .sort((a, b) => new Date(a.merge.absorbedFirstSeenAt).getTime() - new Date(b.merge.absorbedFirstSeenAt).getTime());
+
+    const hasWaves = mergeGroups.length > 0;
+
+    return (
+      <div className="cluster-card-items">
+        {hasWaves && originalItems.length > 0 && (
+          <WaveHeader label={`Original · ${shortDate(narrative.firstSeenAt)}`} isFirst />
+        )}
+        {originalItems.map((item, i) => renderItemRow(item, i, narrative.id))}
+        {mergeGroups.map(({ mergeId, merge, items: waveItems }, gi) => (
+          <div key={mergeId}>
+            <WaveHeader
+              label={`Merged from "${merge.absorbedLabel ?? "Unnamed"}" · ${shortDate(merge.absorbedFirstSeenAt)} → ${shortDate(merge.absorbedLastSeenAt)} · ${merge.absorbedItemCount} items`}
+              isFirst={!hasWaves || (originalItems.length === 0 && gi === 0)}
+            />
+            {waveItems.map((item, i) => renderItemRow(item, i, narrative.id))}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   const activeNarratives = narratives.filter((n) =>
     n.narrativeStage === "emerging" || n.narrativeStage === "developing"
@@ -277,9 +367,9 @@ export default function NarrativesPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {narratives.map((n) => {
               const isExpanded = expandedIds.has(n.id);
-              const items = expandedItems[n.id] ?? n.topItems;
-              const signalCount = items.filter((i) => (i.analystSignal ?? i.itemSignal) === "signal").length;
-              const noiseCount = items.filter((i) => (i.analystSignal ?? i.itemSignal) === "noise").length;
+              const allItems = expandedData[n.id]?.items ?? n.topItems;
+              const signalCount = allItems.filter((i) => (i.analystSignal ?? i.itemSignal) === "signal").length;
+              const noiseCount = allItems.filter((i) => (i.analystSignal ?? i.itemSignal) === "noise").length;
 
               return (
                 <div key={n.id} className="cluster-card" style={{ padding: 16 }}>
@@ -337,35 +427,15 @@ export default function NarrativesPage() {
                     </p>
                   )}
 
-                  {/* Items with signal/noise labels */}
-                  <div className="cluster-card-items">
-                    {items.map((item, i) => {
-                      const effectiveSignal = item.analystSignal ?? item.itemSignal;
-                      return (
-                        <div key={i} className="cluster-item-row" style={{ alignItems: "flex-start", gap: 6 }}>
-                          <PlatformChip platform={item.platform} size="sm" />
-                          <span className="cluster-item-title" style={{ flex: 1 }}>
-                            {item.url ? (
-                              <a href={item.url} target="_blank" rel="noopener noreferrer">
-                                {cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? item.url}
-                              </a>
-                            ) : (
-                              cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? "—"
-                            )}
-                          </span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                            <SignalBadge signal={effectiveSignal} />
-                            <ItemSignalOverride
-                              clusterId={n.id}
-                              itemId={item.itemId}
-                              current={item.analystSignal}
-                              onDone={fetchNarratives}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Items */}
+                  {isExpanded
+                    ? renderExpandedItems(n)
+                    : (
+                      <div className="cluster-card-items">
+                        {n.topItems.map((item, i) => renderItemRow(item, i, n.id))}
+                      </div>
+                    )
+                  }
 
                   {/* Footer */}
                   <div className="cluster-card-foot" style={{ marginTop: 8 }}>

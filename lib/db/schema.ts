@@ -116,6 +116,19 @@ export const clusters = pgTable("clusters", {
   classifiedAt: timestamp("classified_at"),
 });
 
+// Tracks merge history — one row per absorbed cluster
+export const clusterMerges = pgTable("cluster_merges", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  survivingClusterId: uuid("surviving_cluster_id")
+    .references(() => clusters.id, { onDelete: "cascade" })
+    .notNull(),
+  absorbedLabel: text("absorbed_label"),
+  absorbedFirstSeenAt: timestamp("absorbed_first_seen_at").notNull(),
+  absorbedLastSeenAt: timestamp("absorbed_last_seen_at").notNull(),
+  absorbedItemCount: integer("absorbed_item_count").notNull(),
+  mergedAt: timestamp("merged_at").defaultNow().notNull(),
+});
+
 export const clusterItems = pgTable(
   "cluster_items",
   {
@@ -131,6 +144,8 @@ export const clusterItems = pgTable(
     itemSignal: itemSignalEnum("item_signal").default("unclassified").notNull(),
     signalReason: text("signal_reason"),
     analystSignal: text("analyst_signal"), // 'signal' | 'noise' | 'watch'
+    // Merge provenance — null means item was original to this cluster
+    mergeId: uuid("merge_id").references(() => clusterMerges.id, { onDelete: "set null" }),
   },
   (t) => [primaryKey({ columns: [t.clusterId, t.itemId] })]
 );
@@ -148,6 +163,7 @@ export type NewIngestedItem = typeof ingestedItems.$inferInsert;
 export type Cluster = typeof clusters.$inferSelect;
 export type NewCluster = typeof clusters.$inferInsert;
 export type ClusterItem = typeof clusterItems.$inferSelect;
+export type ClusterMerge = typeof clusterMerges.$inferSelect;
 export type RedditSubreddit = typeof redditSubreddits.$inferSelect;
 
 export type ClusterClassification = "unclassified" | "narrative" | "noise";

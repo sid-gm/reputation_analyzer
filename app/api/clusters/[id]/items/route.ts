@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { clusters, clusterItems, ingestedItems } from "@/lib/db/schema";
+import { clusterItems, clusterMerges, ingestedItems } from "@/lib/db/schema";
 
 function dedupeItems<T extends { url: string | null; title: string | null; similarity: number }>(items: T[]): T[] {
   const seen = new Map<string, T>();
@@ -28,6 +28,7 @@ export async function GET(
       itemSignal: clusterItems.itemSignal,
       signalReason: clusterItems.signalReason,
       analystSignal: clusterItems.analystSignal,
+      mergeId: clusterItems.mergeId,
       title: ingestedItems.title,
       body: ingestedItems.body,
       url: ingestedItems.url,
@@ -41,5 +42,29 @@ export async function GET(
 
   const displayable = dedupeItems(rows.filter((i) => i.title || i.body || i.url));
 
-  return NextResponse.json(displayable);
+  // Fetch merge records for this cluster (as surviving cluster)
+  const mergeRows = await db
+    .select()
+    .from(clusterMerges)
+    .where(eq(clusterMerges.survivingClusterId, id))
+    .orderBy(clusterMerges.mergedAt);
+
+  const merges: Record<string, {
+    absorbedLabel: string | null;
+    absorbedFirstSeenAt: string;
+    absorbedLastSeenAt: string;
+    absorbedItemCount: number;
+    mergedAt: string;
+  }> = {};
+  for (const m of mergeRows) {
+    merges[m.id] = {
+      absorbedLabel: m.absorbedLabel,
+      absorbedFirstSeenAt: m.absorbedFirstSeenAt.toISOString(),
+      absorbedLastSeenAt: m.absorbedLastSeenAt.toISOString(),
+      absorbedItemCount: m.absorbedItemCount,
+      mergedAt: m.mergedAt.toISOString(),
+    };
+  }
+
+  return NextResponse.json({ items: displayable, merges });
 }

@@ -9,7 +9,6 @@ export async function GET(req: Request) {
   const sort = searchParams.get("sort") ?? "activity";
   const hideSingletons = searchParams.get("hideSingletons") === "true";
   const classificationFilter = searchParams.get("classification") ?? "all";
-  const stageFilter = searchParams.get("stage") ?? "all";
   const confidenceFilter = searchParams.get("confidence") ?? "all";
 
   const baseConditions = [isNull(clusters.archivedAt)];
@@ -34,13 +33,6 @@ export async function GET(req: Request) {
   } else if (classificationFilter === "unclassified") {
     baseConditions.push(
       and(isNull(clusters.analystClassification), eq(clusters.classification, "unclassified"))!
-    );
-  }
-
-  // Stage filter — only relevant for narratives
-  if (stageFilter !== "all") {
-    baseConditions.push(
-      eq(clusters.narrativeStage, stageFilter as "emerging" | "developing" | "peaked" | "declining")
     );
   }
 
