@@ -11,6 +11,8 @@ type MergeInfo = {
   absorbedLastSeenAt: string;
   absorbedItemCount: number;
   mergedAt: string;
+  ingestedFirstAt: string;
+  ingestedLastAt: string;
 };
 
 type ClusterItem = {
@@ -518,7 +520,7 @@ export default function ClustersPage() {
         {mergeGroups.map(({ mergeId, merge, items: waveItems }, gi) => (
           <div key={mergeId}>
             <WaveHeader
-              label={`Merged from "${merge.absorbedLabel ?? "Unnamed"}" · ${shortDate(merge.absorbedFirstSeenAt)} → ${shortDate(merge.absorbedLastSeenAt)} · ${merge.absorbedItemCount} items`}
+              label={`Merged from "${merge.absorbedLabel ?? "Unnamed"}" · ${shortDate(merge.ingestedFirstAt)} → ${shortDate(merge.ingestedLastAt)} · ${merge.absorbedItemCount} items`}
               isFirst={!hasWaves || (originalItems.length === 0 && gi === 0)}
             />
             {waveItems.map((item, i) => renderItemRow(item, i))}

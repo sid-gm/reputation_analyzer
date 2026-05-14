@@ -18,6 +18,19 @@ type ClusterItem = {
   publishedAt: string | null;
 };
 
+type MergeInfo = {
+  absorbedLabel: string | null;
+  absorbedItemCount: number;
+  mergedAt: string;
+  ingestedFirstAt: string;
+  ingestedLastAt: string;
+};
+
+type ExpandedData = {
+  items: ClusterItem[];
+  merges: Record<string, MergeInfo>;
+};
+
 type Cluster = {
   id: string;
   label: string | null;
@@ -81,11 +94,23 @@ function AnalystBadge({ classification }: { classification: string }) {
   );
 }
 
+function WaveHeader({ label, isFirst }: { label: string; isFirst: boolean }) {
+  return (
+    <div style={{
+      fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em",
+      color: "var(--ink-30)", padding: "5px 0 3px",
+      borderTop: isFirst ? "none" : "1px solid var(--border-soft)", marginTop: isFirst ? 0 : 6,
+    }}>
+      {label}
+    </div>
+  );
+}
+
 export default function SignalWatchPage() {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [expandedItems, setExpandedItems] = useState<Record<string, ClusterItem[]>>({});
+  const [expandedData, setExpandedData] = useState<Record<string, ExpandedData>>({});
 
   const fetchClusters = useCallback(async () => {
     setLoading(true);
@@ -102,13 +127,13 @@ export default function SignalWatchPage() {
       setExpandedIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
       return;
     }
-    if (!expandedItems[id]) {
+    if (!expandedData[id]) {
       const res = await fetch(`/api/clusters/${id}/items`);
-      const data = await res.json();
-      setExpandedItems((prev) => ({ ...prev, [id]: data.items ?? [] }));
+      const data: ExpandedData = await res.json();
+      setExpandedData((prev) => ({ ...prev, [id]: data }));
     }
     setExpandedIds((prev) => new Set(prev).add(id));
-  }, [expandedIds, expandedItems]);
+  }, [expandedIds, expandedData]);
 
   const signalCount = clusters.filter((c) => c.analystClassification === "signal").length;
   const watchCount = clusters.filter((c) => c.analystClassification === "watch").length;
@@ -160,7 +185,8 @@ export default function SignalWatchPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {clusters.map((cluster) => {
               const isExpanded = expandedIds.has(cluster.id);
-              const displayItems = isExpanded ? (expandedItems[cluster.id] ?? cluster.topItems) : cluster.topItems;
+              const expanded = expandedData[cluster.id];
+              const displayItems = isExpanded ? (expanded?.items ?? cluster.topItems) : cluster.topItems;
               return (
                 <div key={cluster.id} className="cluster-card" style={{ padding: 16 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
@@ -195,8 +221,8 @@ export default function SignalWatchPage() {
                     </p>
                   )}
 
-                  <div className="cluster-card-items">
-                    {displayItems.map((item, i) => (
+                  {(() => {
+                    const renderItem = (item: ClusterItem, i: number) => (
                       <div key={i} className="cluster-item-row" style={{ alignItems: "flex-start", gap: 6 }}>
                         <PlatformChip platform={item.platform} size="sm" />
                         <span className="cluster-item-title" style={{ flex: 1 }}>
@@ -209,8 +235,33 @@ export default function SignalWatchPage() {
                           )}
                         </span>
                       </div>
-                    ))}
-                  </div>
+                    );
+                    if (!isExpanded || !expanded?.merges || Object.keys(expanded.merges).length === 0) {
+                      return <div className="cluster-card-items">{displayItems.map(renderItem)}</div>;
+                    }
+                    const originalItems = displayItems.filter((i) => !i.mergeId);
+                    const mergeGroups = Object.entries(expanded.merges)
+                      .map(([mergeId, merge]) => ({ mergeId, merge, items: displayItems.filter((i) => i.mergeId === mergeId) }))
+                      .filter((g) => g.items.length > 0)
+                      .sort((a, b) => new Date(a.merge.ingestedFirstAt).getTime() - new Date(b.merge.ingestedFirstAt).getTime());
+                    return (
+                      <div className="cluster-card-items">
+                        {originalItems.length > 0 && mergeGroups.length > 0 && (
+                          <WaveHeader label="Original" isFirst />
+                        )}
+                        {originalItems.map(renderItem)}
+                        {mergeGroups.map(({ mergeId, merge, items: waveItems }, gi) => (
+                          <div key={mergeId}>
+                            <WaveHeader
+                              label={`Merged from "${merge.absorbedLabel ?? "Unnamed"}" · ${shortDate(merge.ingestedFirstAt)} → ${shortDate(merge.ingestedLastAt)} · ${merge.absorbedItemCount} items`}
+                              isFirst={originalItems.length === 0 && gi === 0}
+                            />
+                            {waveItems.map(renderItem)}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   <div className="cluster-card-foot" style={{ marginTop: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

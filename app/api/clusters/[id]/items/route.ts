@@ -34,13 +34,30 @@ export async function GET(
       url: ingestedItems.url,
       platform: ingestedItems.platform,
       publishedAt: ingestedItems.publishedAt,
+      ingestedAt: ingestedItems.createdAt,
     })
     .from(clusterItems)
     .innerJoin(ingestedItems, eq(clusterItems.itemId, ingestedItems.id))
     .where(eq(clusterItems.clusterId, id))
     .orderBy(desc(clusterItems.similarity));
 
-  const displayable = dedupeItems(rows.filter((i) => i.title || i.body || i.url));
+  // Compute ingestion time range per mergeId before deduping
+  const ingestedByMerge = new Map<string, { first: Date; last: Date }>();
+  for (const row of rows) {
+    if (!row.mergeId) continue;
+    const d = row.ingestedAt;
+    const existing = ingestedByMerge.get(row.mergeId);
+    if (!existing) {
+      ingestedByMerge.set(row.mergeId, { first: d, last: d });
+    } else {
+      if (d < existing.first) existing.first = d;
+      if (d > existing.last) existing.last = d;
+    }
+  }
+
+  const displayable = dedupeItems(
+    rows.filter((i) => i.title || i.body || i.url).map(({ ingestedAt: _, ...rest }) => rest)
+  );
 
   // Fetch merge records for this cluster (as surviving cluster)
   const mergeRows = await db
@@ -55,14 +72,19 @@ export async function GET(
     absorbedLastSeenAt: string;
     absorbedItemCount: number;
     mergedAt: string;
+    ingestedFirstAt: string;
+    ingestedLastAt: string;
   }> = {};
   for (const m of mergeRows) {
+    const ingestedRange = ingestedByMerge.get(m.id);
     merges[m.id] = {
       absorbedLabel: m.absorbedLabel,
       absorbedFirstSeenAt: m.absorbedFirstSeenAt.toISOString(),
       absorbedLastSeenAt: m.absorbedLastSeenAt.toISOString(),
       absorbedItemCount: m.absorbedItemCount,
       mergedAt: m.mergedAt.toISOString(),
+      ingestedFirstAt: (ingestedRange?.first ?? m.mergedAt).toISOString(),
+      ingestedLastAt: (ingestedRange?.last ?? m.mergedAt).toISOString(),
     };
   }
 
