@@ -30,9 +30,12 @@ type ClusterItem = {
   ingestedAt: string;
 };
 
+type PeriodNarrative = { aiNarrative: string | null; analystNarrative: string | null };
+
 type ExpandedData = {
   items: ClusterItem[];
   merges: Record<string, MergeInfo>;
+  periodNarratives: Record<string, PeriodNarrative>;
 };
 
 type Cluster = {
@@ -352,6 +355,9 @@ export default function ClustersPage() {
   const [expandedData, setExpandedData] = useState<Record<string, ExpandedData>>({});
   const [expandLoading, setExpandLoading] = useState<Set<string>>(new Set());
   const [summaryExpanded, setSummaryExpanded] = useState<Set<string>>(new Set());
+  const [editingPeriod, setEditingPeriod] = useState<{ clusterId: string; date: string } | null>(null);
+  const [editingPeriodDraft, setEditingPeriodDraft] = useState("");
+  const [savingPeriod, setSavingPeriod] = useState(false);
 
   // Merge mode
   const [mergeMode, setMergeMode] = useState(false);
@@ -498,31 +504,74 @@ export default function ClustersPage() {
   const toggleSummary = (id: string) =>
     setSummaryExpanded((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
 
+  const savePeriodNarrative = async (clusterId: string, date: string, narrative: string) => {
+    setSavingPeriod(true);
+    await fetch(`/api/clusters/${clusterId}/period-narrative`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, narrative }),
+    });
+    setExpandedData((prev) => {
+      const d = prev[clusterId];
+      if (!d) return prev;
+      return { ...prev, [clusterId]: { ...d, periodNarratives: { ...d.periodNarratives, [date]: { ...(d.periodNarratives[date] ?? { aiNarrative: null }), analystNarrative: narrative } } } };
+    });
+    setSavingPeriod(false);
+    setEditingPeriod(null);
+  };
+
   // ── Render date-grouped expanded items ──────────────────────────────────────
   function renderExpandedItems(cluster: Cluster) {
     const data = expandedData[cluster.id];
     if (!data) return null;
-    const { items } = data;
+    const { items, periodNarratives } = data;
 
     const byDay = new Map<string, ClusterItem[]>();
     for (const item of items) {
-      const day = shortDate(item.ingestedAt);
+      const day = item.ingestedAt.slice(0, 10);
       if (!byDay.has(day)) byDay.set(day, []);
       byDay.get(day)!.push(item);
     }
-    const dayGroups = [...byDay.entries()].sort(
-      (a, b) => new Date(a[1][0].ingestedAt).getTime() - new Date(b[1][0].ingestedAt).getTime()
-    );
+    // Descending: most recent day first; items within each day also newest first
+    const dayGroups = [...byDay.entries()]
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([day, dayItems]) => [day, [...dayItems].sort((a, b) => b.ingestedAt.localeCompare(a.ingestedAt))] as [string, ClusterItem[]]);
     const multiDay = dayGroups.length > 1;
 
     return (
       <div className="cluster-card-items">
-        {dayGroups.map(([day, dayItems], gi) => (
-          <div key={day}>
-            {multiDay && <WaveHeader label={day} isFirst={gi === 0} />}
-            {dayItems.map((item, i) => renderItemRow(item, i))}
-          </div>
-        ))}
+        {dayGroups.map(([day, dayItems], gi) => {
+          const pn = periodNarratives[day];
+          const periodText = pn?.analystNarrative ?? pn?.aiNarrative ?? null;
+          const isEditingThis = editingPeriod?.clusterId === cluster.id && editingPeriod.date === day;
+          return (
+            <div key={day}>
+              {multiDay && <WaveHeader label={shortDate(day + "T12:00:00Z")} isFirst={gi === 0} />}
+              {isEditingThis ? (
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 6, padding: "4px 0" }}>
+                  <textarea
+                    autoFocus
+                    value={editingPeriodDraft}
+                    onChange={(e) => setEditingPeriodDraft(e.target.value)}
+                    rows={2}
+                    style={{ flex: 1, fontSize: 12, fontFamily: "inherit", color: "var(--ink-60)", background: "var(--paper)", border: "1px solid var(--accent)", borderRadius: 4, padding: "4px 6px", resize: "vertical" }}
+                  />
+                  <button className="btn" style={{ fontSize: 11, padding: "3px 8px" }} disabled={savingPeriod} onClick={() => savePeriodNarrative(cluster.id, day, editingPeriodDraft)}>{savingPeriod ? "…" : "Save"}</button>
+                  <button className="btn-ghost btn" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setEditingPeriod(null)}>Cancel</button>
+                </div>
+              ) : (
+                <div
+                  style={{ fontSize: 12, color: "var(--ink-50)", lineHeight: 1.5, marginBottom: 4, padding: "3px 0", cursor: "pointer", fontStyle: periodText ? "normal" : "italic" }}
+                  title="Click to edit period note"
+                  onClick={() => { setEditingPeriod({ clusterId: cluster.id, date: day }); setEditingPeriodDraft(periodText ?? ""); }}
+                >
+                  {periodText ?? <span style={{ opacity: 0.4 }}>Add note…</span>}
+                </div>
+              )}
+              {dayItems.map((item, i) => renderItemRow(item, i))}
+            </div>
+          );
+        })}
       </div>
     );
   }

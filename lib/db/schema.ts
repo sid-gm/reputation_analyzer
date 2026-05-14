@@ -153,6 +153,23 @@ export const clusterItems = pgTable(
   (t) => [primaryKey({ columns: [t.clusterId, t.itemId] })]
 );
 
+export const clusterPeriodNarratives = pgTable(
+  "cluster_period_narratives",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    clusterId: uuid("cluster_id")
+      .references(() => clusters.id, { onDelete: "cascade" })
+      .notNull(),
+    periodDate: text("period_date").notNull(), // "YYYY-MM-DD" UTC
+    aiNarrative: text("ai_narrative"),
+    analystNarrative: text("analyst_narrative"),
+    generatedAt: timestamp("generated_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique("cluster_period_unique").on(t.clusterId, t.periodDate)]
+);
+
 export const redditSubreddits = pgTable("reddit_subreddits", {
   id: uuid("id").defaultRandom().primaryKey(),
   subredditName: text("subreddit_name").notNull().unique(),
@@ -166,6 +183,7 @@ export type NewIngestedItem = typeof ingestedItems.$inferInsert;
 export type Cluster = typeof clusters.$inferSelect;
 export type NewCluster = typeof clusters.$inferInsert;
 export type ClusterItem = typeof clusterItems.$inferSelect;
+export type ClusterPeriodNarrative = typeof clusterPeriodNarratives.$inferSelect;
 export type ClusterMerge = typeof clusterMerges.$inferSelect;
 export type RedditSubreddit = typeof redditSubreddits.$inferSelect;
 

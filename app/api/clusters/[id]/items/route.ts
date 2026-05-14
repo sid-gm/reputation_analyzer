@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { clusterItems, clusterMerges, ingestedItems } from "@/lib/db/schema";
+import { clusterItems, clusterMerges, clusterPeriodNarratives, ingestedItems } from "@/lib/db/schema";
 
 function dedupeItems<T extends { url: string | null; title: string | null; similarity: number }>(items: T[]): T[] {
   const seen = new Map<string, T>();
@@ -88,5 +88,19 @@ export async function GET(
     };
   }
 
-  return NextResponse.json({ items: displayable, merges });
+  const periodRows = await db
+    .select({
+      periodDate: clusterPeriodNarratives.periodDate,
+      aiNarrative: clusterPeriodNarratives.aiNarrative,
+      analystNarrative: clusterPeriodNarratives.analystNarrative,
+    })
+    .from(clusterPeriodNarratives)
+    .where(eq(clusterPeriodNarratives.clusterId, id));
+
+  const periodNarratives: Record<string, { aiNarrative: string | null; analystNarrative: string | null }> = {};
+  for (const row of periodRows) {
+    periodNarratives[row.periodDate] = { aiNarrative: row.aiNarrative, analystNarrative: row.analystNarrative };
+  }
+
+  return NextResponse.json({ items: displayable, merges, periodNarratives });
 }
