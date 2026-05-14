@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { and, count, eq, gt, gte, isNull } from "drizzle-orm";
+import { and, count, eq, gt, gte, isNull, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clusters, clusterItems, ingestedItems, trackedEntities } from "@/lib/db/schema";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { classifyCluster, classifyItemSignals } from "@/lib/ai/classify";
+import { computeNarrativeStage } from "@/lib/narrative-stage";
 
 const BATCH_SIZE = 15;
 
@@ -12,9 +13,9 @@ export async function GET(req: Request) {
   if (authError) return authError;
 
   const now = new Date();
-  const twoDaysAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+  const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const h48ago = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  // Classify: unclassified clusters with ≥2 items, OR narrative clusters with new items since last classification
   const toClassify = await db
     .select({
       id: clusters.id,
@@ -25,16 +26,14 @@ export async function GET(req: Request) {
       lastSeenAt: clusters.lastSeenAt,
       classifiedAt: clusters.classifiedAt,
       classification: clusters.classification,
+      peakMomentum: clusters.peakMomentum,
     })
     .from(clusters)
     .where(
       and(
         isNull(clusters.archivedAt),
         gte(clusters.itemCount, 2),
-        // unclassified, or narrative that got new items since last classified
-        and(
-          isNull(clusters.analystClassification) // don't re-run if analyst already overrode
-        )
+        isNull(clusters.analystClassification)
       )
     )
     .limit(BATCH_SIZE);
@@ -43,7 +42,6 @@ export async function GET(req: Request) {
   let signalsTagged = 0;
 
   for (const cluster of toClassify) {
-    // Skip if already classified and no new items since classifiedAt
     if (
       cluster.classification !== "unclassified" &&
       cluster.classifiedAt &&
@@ -53,7 +51,6 @@ export async function GET(req: Request) {
     }
 
     try {
-      // Fetch entity label
       const [entity] = cluster.entityId
         ? await db
             .select({ label: trackedEntities.label })
@@ -61,7 +58,6 @@ export async function GET(req: Request) {
             .where(eq(trackedEntities.id, cluster.entityId))
         : [{ label: "Unknown" }];
 
-      // Fetch top 5 item titles
       const items = await db
         .select({
           title: ingestedItems.title,
@@ -80,16 +76,31 @@ export async function GET(req: Request) {
       const ageInDays =
         (now.getTime() - new Date(cluster.firstSeenAt).getTime()) / (1000 * 60 * 60 * 24);
 
-      // Compute momentum: items added in last 48h / 2
-      const [recentCount] = await db
+      // Velocity windows for stage computation
+      const [v24] = await db
+        .select({ cnt: count(clusterItems.itemId) })
+        .from(clusterItems)
+        .where(and(eq(clusterItems.clusterId, cluster.id), gt(clusterItems.addedAt, h24ago)));
+      const velocity24h = v24?.cnt ?? 0;
+
+      const [vPrev] = await db
         .select({ cnt: count(clusterItems.itemId) })
         .from(clusterItems)
         .where(
-          and(eq(clusterItems.clusterId, cluster.id), gt(clusterItems.addedAt, twoDaysAgo))
+          and(
+            eq(clusterItems.clusterId, cluster.id),
+            gt(clusterItems.addedAt, h48ago),
+            lte(clusterItems.addedAt, h24ago)
+          )
         );
-      const momentum = (recentCount?.cnt ?? 0) / 2;
+      const prevVelocity24h = vPrev?.cnt ?? 0;
 
-      // Call AI classification
+      // momentum shown in UI: average daily rate over 48h window
+      const momentum = (velocity24h + prevVelocity24h) / 2;
+
+      // Update peak: track the highest single-day velocity ever seen
+      const newPeakMomentum = Math.max(cluster.peakMomentum ?? 0, velocity24h);
+
       const result = await classifyCluster({
         entityLabel: entity?.label ?? "Unknown",
         clusterLabel: cluster.label,
@@ -99,22 +110,31 @@ export async function GET(req: Request) {
         platformCount: platforms.length,
       });
 
-      // Write classification back to cluster
+      const narrativeStage =
+        result.classification === "narrative"
+          ? computeNarrativeStage({
+              velocity24h,
+              prevVelocity24h,
+              peakMomentum: cluster.peakMomentum,
+              ageInDays,
+            })
+          : null;
+
       await db
         .update(clusters)
         .set({
           classification: result.classification,
-          narrativeStage: result.narrativeStage ?? undefined,
+          narrativeStage: narrativeStage ?? undefined,
           narrativeSummary: result.narrativeSummary,
           classificationConfidence: result.confidence,
           momentum,
+          peakMomentum: newPeakMomentum,
           classifiedAt: now,
         })
         .where(eq(clusters.id, cluster.id));
 
       classified++;
 
-      // If narrative, classify items that haven't been tagged yet
       if (result.classification === "narrative" && result.narrativeSummary) {
         const untaggedItems = await db
           .select({
@@ -143,13 +163,13 @@ export async function GET(req: Request) {
             })),
           });
 
-          for (const classified of signalResult.items) {
-            const idx = classified.index - 1;
+          for (const s of signalResult.items) {
+            const idx = s.index - 1;
             if (idx < 0 || idx >= untaggedItems.length) continue;
             const item = untaggedItems[idx];
             await db
               .update(clusterItems)
-              .set({ itemSignal: classified.signal, signalReason: classified.reason })
+              .set({ itemSignal: s.signal, signalReason: s.reason })
               .where(
                 and(
                   eq(clusterItems.clusterId, cluster.id),

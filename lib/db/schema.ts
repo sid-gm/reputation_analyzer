@@ -110,6 +110,7 @@ export const clusters = pgTable("clusters", {
   narrativeStage: narrativeStageEnum("narrative_stage"),
   narrativeSummary: text("narrative_summary"),
   momentum: real("momentum"),
+  peakMomentum: real("peak_momentum"),
   classificationConfidence: real("classification_confidence"),
   analystClassification: text("analyst_classification"), // 'narrative' | 'noise'
   analystNote: text("analyst_note"),

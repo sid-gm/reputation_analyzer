@@ -3,7 +3,6 @@ import { openai } from "@ai-sdk/openai";
 
 export type ClusterClassificationResult = {
   classification: "narrative" | "noise";
-  narrativeStage: "emerging" | "developing" | "peaked" | "declining" | null;
   narrativeSummary: string | null;
   confidence: number;
 };
@@ -42,14 +41,8 @@ Classify this cluster:
 - "narrative": a real developing story with coherent arc, multiple angles, building momentum
 - "noise": keyword mentions without a story (press releases, job listings, generic name-drops, unrelated content)
 
-Narrative stages (only if narrative):
-- "emerging": < 2 days, limited sources, early signals
-- "developing": gaining momentum, multiple sources, active coverage
-- "peaked": past peak, wide coverage but slowing
-- "declining": fading, few new developments
-
 Respond with JSON only, no markdown:
-{"classification":"narrative"|"noise","narrativeStage":"emerging"|"developing"|"peaked"|"declining"|null,"narrativeSummary":"1-2 sentence summary if narrative, null if noise","confidence":0.0-1.0}`,
+{"classification":"narrative"|"noise","narrativeSummary":"1-2 sentence summary if narrative, null if noise","confidence":0.0-1.0}`,
     maxOutputTokens: 200,
   });
 
@@ -58,12 +51,11 @@ Respond with JSON only, no markdown:
     const parsed = JSON.parse(raw) as ClusterClassificationResult;
     return {
       classification: parsed.classification === "narrative" ? "narrative" : "noise",
-      narrativeStage: parsed.narrativeStage ?? null,
       narrativeSummary: parsed.narrativeSummary ?? null,
       confidence: Math.max(0, Math.min(1, parsed.confidence ?? 0.5)),
     };
   } catch {
-    return { classification: "noise", narrativeStage: null, narrativeSummary: null, confidence: 0.3 };
+    return { classification: "noise", narrativeSummary: null, confidence: 0.3 };
   }
 }
 
