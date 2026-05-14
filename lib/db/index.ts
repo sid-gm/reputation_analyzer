@@ -10,9 +10,9 @@ function getInstance(): DB {
   if (!_db) {
     // neon-http requires the direct (non-pooled) endpoint; pooled URLs go through PgBouncer which doesn't support Neon's HTTP query API
     const url =
-      process.env.sma_DATABASE_URL_UNPOOLED ??
-      process.env.DATABASE_URL_UNPOOLED ??
-      process.env.sma_DATABASE_URL ??
+      process.env.sma_DATABASE_URL_UNPOOLED ||
+      process.env.DATABASE_URL_UNPOOLED ||
+      process.env.sma_DATABASE_URL ||
       process.env.DATABASE_URL;
     if (!url) throw new Error("No database URL found in environment");
     _db = drizzle(neon(url), { schema });
