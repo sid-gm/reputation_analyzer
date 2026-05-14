@@ -75,6 +75,9 @@ export default function ClustersPage() {
   const [loading, setLoading] = useState(true);
   const [clusterRunning, setClusterRunning] = useState(false);
   const [clusterResult, setClusterResult] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Record<string, ClusterItem[]>>({});
+  const [expandLoading, setExpandLoading] = useState<Set<string>>(new Set());
 
   const fetchClusters = useCallback(async () => {
     setLoading(true);
@@ -111,6 +114,21 @@ export default function ClustersPage() {
       setClusterRunning(false);
     }
   }, [fetchClusters]);
+
+  const toggleExpand = useCallback(async (clusterId: string) => {
+    if (expandedIds.has(clusterId)) {
+      setExpandedIds((prev) => { const s = new Set(prev); s.delete(clusterId); return s; });
+      return;
+    }
+    if (!expandedItems[clusterId]) {
+      setExpandLoading((prev) => new Set(prev).add(clusterId));
+      const res = await fetch(`/api/clusters/${clusterId}/items`);
+      const items: ClusterItem[] = await res.json();
+      setExpandedItems((prev) => ({ ...prev, [clusterId]: items }));
+      setExpandLoading((prev) => { const s = new Set(prev); s.delete(clusterId); return s; });
+    }
+    setExpandedIds((prev) => new Set(prev).add(clusterId));
+  }, [expandedIds, expandedItems]);
 
   const latestCluster = clusterList[0];
 
@@ -231,25 +249,31 @@ export default function ClustersPage() {
                   {shortDate(cluster.firstSeenAt)} → {relativeTime(cluster.lastSeenAt)}
                 </div>
 
-                {cluster.topItems.length > 0 && (
-                  <div className="cluster-card-items">
-                    {cluster.topItems.map((item, i) => (
-                      <div key={i} className="cluster-item-row">
-                        <PlatformChip platform={item.platform} size="sm" />
-                        <span className="cluster-item-title">
-                          {item.url ? (
-                            <a href={item.url} target="_blank" rel="noopener noreferrer">
-                              {cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? item.url}
-                            </a>
-                          ) : (
-                            cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? "—"
-                          )}
-                        </span>
-                        <Dot color={simColor(item.similarity)} size={7} />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  const isExpanded = expandedIds.has(cluster.id);
+                  const displayItems = isExpanded
+                    ? (expandedItems[cluster.id] ?? cluster.topItems)
+                    : cluster.topItems;
+                  return displayItems.length > 0 ? (
+                    <div className="cluster-card-items">
+                      {displayItems.map((item, i) => (
+                        <div key={i} className="cluster-item-row">
+                          <PlatformChip platform={item.platform} size="sm" />
+                          <span className="cluster-item-title">
+                            {item.url ? (
+                              <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                {cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? item.url}
+                              </a>
+                            ) : (
+                              cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? "—"
+                            )}
+                          </span>
+                          <Dot color={simColor(item.similarity)} size={7} />
+                        </div>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="cluster-card-foot">
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -261,7 +285,16 @@ export default function ClustersPage() {
                     ))}
                   </div>
                   {cluster.itemCount > 3 && (
-                    <span className="cluster-card-more">+ {cluster.itemCount - 3} more</span>
+                    <button
+                      className="cluster-card-more"
+                      onClick={() => toggleExpand(cluster.id)}
+                    >
+                      {expandLoading.has(cluster.id)
+                        ? "loading…"
+                        : expandedIds.has(cluster.id)
+                        ? "show less"
+                        : `+ ${cluster.itemCount - 3} more`}
+                    </button>
                   )}
                 </div>
               </div>

@@ -68,6 +68,17 @@ export async function GET(req: Request) {
           .orderBy(desc(clusterItems.similarity))
       : [];
 
+  function dedupeItems<T extends { url: string | null; title: string | null; similarity: number }>(items: T[]): T[] {
+    const seen = new Map<string, T>();
+    for (const item of items) {
+      const key = item.url ?? item.title ?? "";
+      if (!key) continue;
+      const prev = seen.get(key);
+      if (!prev || item.similarity > prev.similarity) seen.set(key, item);
+    }
+    return [...seen.values()];
+  }
+
   const itemsByCluster = new Map<string, typeof allItems>();
   for (const item of allItems) {
     if (!itemsByCluster.has(item.clusterId)) itemsByCluster.set(item.clusterId, []);
@@ -77,7 +88,7 @@ export async function GET(req: Request) {
   const result = allClusters.map((cluster) => {
     const items = itemsByCluster.get(cluster.id) ?? [];
     const platforms = [...new Set(items.map((i) => i.platform))];
-    const displayable = items.filter((i) => i.title || i.body || i.url);
+    const displayable = dedupeItems(items.filter((i) => i.title || i.body || i.url));
     return { ...cluster, topItems: displayable.slice(0, 3), platforms };
   });
 
