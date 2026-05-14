@@ -35,6 +35,26 @@ export const entityTypeEnum = pgEnum("entity_type", [
   "product",
 ]);
 
+export const clusterClassificationEnum = pgEnum("cluster_classification", [
+  "unclassified",
+  "narrative",
+  "noise",
+]);
+
+export const narrativeStageEnum = pgEnum("narrative_stage", [
+  "emerging",
+  "developing",
+  "peaked",
+  "declining",
+]);
+
+export const itemSignalEnum = pgEnum("item_signal", [
+  "unclassified",
+  "signal",
+  "noise",
+  "watch",
+]);
+
 export const platformEnum = pgEnum("platform", [
   "hackernews",
   "reddit",
@@ -85,6 +105,15 @@ export const clusters = pgTable("clusters", {
   lastSeenAt: timestamp("last_seen_at").notNull(),
   archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Classification fields
+  classification: clusterClassificationEnum("classification").default("unclassified").notNull(),
+  narrativeStage: narrativeStageEnum("narrative_stage"),
+  narrativeSummary: text("narrative_summary"),
+  momentum: real("momentum"),
+  classificationConfidence: real("classification_confidence"),
+  analystClassification: text("analyst_classification"), // 'narrative' | 'noise'
+  analystNote: text("analyst_note"),
+  classifiedAt: timestamp("classified_at"),
 });
 
 export const clusterItems = pgTable(
@@ -98,6 +127,10 @@ export const clusterItems = pgTable(
       .notNull(),
     similarity: real("similarity").notNull(),
     addedAt: timestamp("added_at").defaultNow().notNull(),
+    // Signal classification
+    itemSignal: itemSignalEnum("item_signal").default("unclassified").notNull(),
+    signalReason: text("signal_reason"),
+    analystSignal: text("analyst_signal"), // 'signal' | 'noise' | 'watch'
   },
   (t) => [primaryKey({ columns: [t.clusterId, t.itemId] })]
 );
@@ -116,3 +149,7 @@ export type Cluster = typeof clusters.$inferSelect;
 export type NewCluster = typeof clusters.$inferInsert;
 export type ClusterItem = typeof clusterItems.$inferSelect;
 export type RedditSubreddit = typeof redditSubreddits.$inferSelect;
+
+export type ClusterClassification = "unclassified" | "narrative" | "noise";
+export type NarrativeStage = "emerging" | "developing" | "peaked" | "declining";
+export type ItemSignal = "unclassified" | "signal" | "noise" | "watch";

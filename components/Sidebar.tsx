@@ -12,7 +12,6 @@ const SOURCES_NAV = [
 ];
 
 const SOON = [
-  { label: "Classify", stage: "P3" },
   { label: "Analysis", stage: "P4" },
   { label: "Report",   stage: "P5" },
 ];
@@ -57,13 +56,20 @@ export function Sidebar() {
           );
         })}
 
-        <div className="nav-section" style={{ marginTop: 16 }}>Clusters</div>
+        <div className="nav-section" style={{ marginTop: 16 }}>Classify</div>
         <Link
           href="/clusters"
-          className={cx("nav-item nav-item-sub", path.startsWith("/clusters") && "nav-item-on")}
+          className={cx("nav-item nav-item-sub", path === "/clusters" && "nav-item-on")}
         >
           <span className="nav-glyph">◎</span>
           <span className="nav-label">Cluster Review</span>
+        </Link>
+        <Link
+          href="/narratives"
+          className={cx("nav-item nav-item-sub", path.startsWith("/narratives") && "nav-item-on")}
+        >
+          <span className="nav-glyph">◈</span>
+          <span className="nav-label">Narratives</span>
         </Link>
 
         <div className="nav-section" style={{ marginTop: 16 }}>

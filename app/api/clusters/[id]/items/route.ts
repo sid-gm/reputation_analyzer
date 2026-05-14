@@ -23,7 +23,11 @@ export async function GET(
   const rows = await db
     .select({
       clusterId: clusterItems.clusterId,
+      itemId: ingestedItems.id,
       similarity: clusterItems.similarity,
+      itemSignal: clusterItems.itemSignal,
+      signalReason: clusterItems.signalReason,
+      analystSignal: clusterItems.analystSignal,
       title: ingestedItems.title,
       body: ingestedItems.body,
       url: ingestedItems.url,

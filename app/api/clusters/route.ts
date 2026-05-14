@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, avg, count, desc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, avg, count, desc, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clusters, clusterItems, ingestedItems } from "@/lib/db/schema";
 
@@ -8,14 +8,46 @@ export async function GET(req: Request) {
   const entityId = searchParams.get("entityId") ?? undefined;
   const sort = searchParams.get("sort") ?? "activity";
   const hideSingletons = searchParams.get("hideSingletons") === "true";
+  const classificationFilter = searchParams.get("classification") ?? "all";
+  const stageFilter = searchParams.get("stage") ?? "all";
+  const confidenceFilter = searchParams.get("confidence") ?? "all";
 
   const baseConditions = [isNull(clusters.archivedAt)];
   if (entityId) baseConditions.push(eq(clusters.entityId, entityId));
   if (hideSingletons) baseConditions.push(gte(clusters.itemCount, 2));
 
+  // Effective classification = analystClassification if set, else classification
+  if (classificationFilter === "narrative") {
+    baseConditions.push(
+      or(
+        eq(clusters.analystClassification, "narrative"),
+        and(isNull(clusters.analystClassification), eq(clusters.classification, "narrative"))
+      )!
+    );
+  } else if (classificationFilter === "noise") {
+    baseConditions.push(
+      or(
+        eq(clusters.analystClassification, "noise"),
+        and(isNull(clusters.analystClassification), eq(clusters.classification, "noise"))
+      )!
+    );
+  } else if (classificationFilter === "unclassified") {
+    baseConditions.push(
+      and(isNull(clusters.analystClassification), eq(clusters.classification, "unclassified"))!
+    );
+  }
+
+  // Stage filter — only relevant for narratives
+  if (stageFilter !== "all") {
+    baseConditions.push(
+      eq(clusters.narrativeStage, stageFilter as "emerging" | "developing" | "peaked" | "declining")
+    );
+  }
+
   const orderBy =
     sort === "size"    ? desc(clusters.itemCount) :
     sort === "created" ? desc(clusters.createdAt) :
+    sort === "momentum" ? desc(clusters.momentum) :
                          desc(clusters.lastSeenAt);
 
   const allClusters = await db
@@ -26,12 +58,29 @@ export async function GET(req: Request) {
       itemCount: clusters.itemCount,
       firstSeenAt: clusters.firstSeenAt,
       lastSeenAt: clusters.lastSeenAt,
+      // Classification fields
+      classification: clusters.classification,
+      narrativeStage: clusters.narrativeStage,
+      narrativeSummary: clusters.narrativeSummary,
+      momentum: clusters.momentum,
+      classificationConfidence: clusters.classificationConfidence,
+      analystClassification: clusters.analystClassification,
+      analystNote: clusters.analystNote,
     })
     .from(clusters)
     .where(and(...baseConditions))
     .orderBy(orderBy);
 
-  // Stats (no hideSingletons filter — always show total picture)
+  // Apply confidence filter in memory (simpler than SQL)
+  const filtered = confidenceFilter === "all" ? allClusters : allClusters.filter((c) => {
+    const conf = c.classificationConfidence ?? 0;
+    if (confidenceFilter === "high")   return conf >= 0.8;
+    if (confidenceFilter === "medium") return conf >= 0.5 && conf < 0.8;
+    if (confidenceFilter === "low")    return conf < 0.5;
+    return true;
+  });
+
+  // Stats (no extra filters — always show total picture)
   const statsConditions = [isNull(clusters.archivedAt)];
   if (entityId) statsConditions.push(eq(clusters.entityId, entityId));
 
@@ -49,13 +98,16 @@ export async function GET(req: Request) {
     .from(clusterItems);
 
   // Fetch all items for visible clusters in one query, then group in memory
-  const clusterIds = allClusters.map((c) => c.id);
+  const clusterIds = filtered.map((c) => c.id);
   const allItems =
     clusterIds.length > 0
       ? await db
           .select({
             clusterId: clusterItems.clusterId,
+            itemId: ingestedItems.id,
             similarity: clusterItems.similarity,
+            itemSignal: clusterItems.itemSignal,
+            analystSignal: clusterItems.analystSignal,
             title: ingestedItems.title,
             body: ingestedItems.body,
             url: ingestedItems.url,
@@ -85,11 +137,18 @@ export async function GET(req: Request) {
     itemsByCluster.get(item.clusterId)!.push(item);
   }
 
-  const result = allClusters.map((cluster) => {
+  const result = filtered.map((cluster) => {
     const items = itemsByCluster.get(cluster.id) ?? [];
     const platforms = [...new Set(items.map((i) => i.platform))];
     const displayable = dedupeItems(items.filter((i) => i.title || i.body || i.url));
-    return { ...cluster, topItems: displayable.slice(0, 3), platforms };
+    // Effective classification: analyst override wins
+    const effectiveClassification = cluster.analystClassification ?? cluster.classification;
+    return {
+      ...cluster,
+      effectiveClassification,
+      topItems: displayable.slice(0, 3),
+      platforms,
+    };
   });
 
   try {
