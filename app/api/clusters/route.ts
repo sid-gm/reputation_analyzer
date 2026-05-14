@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, avg, count, desc, eq, gte, inArray, isNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { clusters, clusterItems, ingestedItems } from "@/lib/db/schema";
+import { clusters, clusterItems, ingestedItems, trackedEntities } from "@/lib/db/schema";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -124,6 +124,7 @@ export async function GET(req: Request) {
             platform: ingestedItems.platform,
             publishedAt: ingestedItems.publishedAt,
             ingestedAt: ingestedItems.createdAt,
+            itemEntityId: ingestedItems.entityId,
           })
           .from(clusterItems)
           .innerJoin(ingestedItems, eq(clusterItems.itemId, ingestedItems.id))
@@ -148,17 +149,25 @@ export async function GET(req: Request) {
     itemsByCluster.get(item.clusterId)!.push(item);
   }
 
+  const allEntityIds = [...new Set(allItems.map((i) => i.itemEntityId).filter((id): id is string => !!id))];
+  const entityRows = allEntityIds.length > 0
+    ? await db.select({ id: trackedEntities.id, label: trackedEntities.label }).from(trackedEntities).where(inArray(trackedEntities.id, allEntityIds))
+    : [];
+  const entityMap = new Map(entityRows.map((e) => [e.id, e.label]));
+
   const result = filtered.map((cluster) => {
     const items = itemsByCluster.get(cluster.id) ?? [];
     const platforms = [...new Set(items.map((i) => i.platform))];
     const displayable = dedupeItems(items.filter((i) => i.title || i.body || i.url));
-    // Effective classification: analyst override wins
     const effectiveClassification = cluster.analystClassification ?? cluster.classification;
+    const clusterEntityIds = [...new Set(items.map((i) => i.itemEntityId).filter((id): id is string => !!id))];
+    const clusterTrackedEntities = clusterEntityIds.map((id) => ({ id, label: entityMap.get(id) ?? id }));
     return {
       ...cluster,
       effectiveClassification,
       topItems: displayable.slice(0, 3),
       platforms,
+      trackedEntities: clusterTrackedEntities,
     };
   });
 
