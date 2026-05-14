@@ -116,6 +116,7 @@ export async function GET(req: Request) {
             url: ingestedItems.url,
             platform: ingestedItems.platform,
             publishedAt: ingestedItems.publishedAt,
+            ingestedAt: ingestedItems.createdAt,
           })
           .from(clusterItems)
           .innerJoin(ingestedItems, eq(clusterItems.itemId, ingestedItems.id))
