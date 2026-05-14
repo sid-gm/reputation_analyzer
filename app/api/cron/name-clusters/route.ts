@@ -32,7 +32,7 @@ export async function GET(req: Request) {
 
       const { text } = await generateText({
         model: openai("gpt-4o-mini"),
-        prompt: `These news headlines are all about the same topic. Respond with only a concise 3-6 word topic label, no punctuation:\n${titles.map((t) => `- ${t}`).join("\n")}`,
+        prompt: `These articles, tweets, posts or news headlines are all about the same topic. Respond with only a concise 3-6 word topic label, no punctuation:\n${titles.map((t) => `- ${t}`).join("\n")}`,
         maxOutputTokens: 20,
       });
 
