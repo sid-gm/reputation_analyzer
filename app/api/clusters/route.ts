@@ -36,7 +36,14 @@ export async function GET(req: Request) {
     baseConditions.push(
       or(
         eq(clusters.analystClassification, "narrative"),
-        and(isNull(clusters.analystClassification), eq(clusters.classification, "narrative"))
+        and(
+          eq(clusters.classification, "narrative"),
+          or(
+            isNull(clusters.analystClassification),
+            eq(clusters.analystClassification, "signal"),
+            eq(clusters.analystClassification, "watch")
+          )
+        )
       )!
     );
   } else if (classificationFilter === "noise") {
