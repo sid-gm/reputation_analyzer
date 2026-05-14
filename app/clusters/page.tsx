@@ -332,8 +332,8 @@ export default function ClustersPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [entityId, setEntityId] = useState("all");
-  const [sort, setSort] = useState("activity");
-  const [hideSingletons, setHideSingletons] = useState(false);
+  const [sort, setSort] = useState("size");
+  const [hideSingletons, setHideSingletons] = useState(true);
   const [classificationFilter, setClassificationFilter] = useState("all");
 
   const [loading, setLoading] = useState(true);
