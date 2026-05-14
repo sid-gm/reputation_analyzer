@@ -54,6 +54,7 @@ type Narrative = {
   effectiveClassification: string;
   topItems: ClusterItem[];
   platforms: string[];
+  trackedEntities: Array<{ id: string; label: string }>;
 };
 
 type Entity = { id: string; label: string };
@@ -652,6 +653,7 @@ export default function NarrativesPage() {
                   {/* Footer */}
                   <div className="cluster-card-foot" style={{ marginTop: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-40)" }}>Source</span>
                       {n.platforms.map((p) => <PlatformChip key={p} platform={p} size="sm" />)}
                     </div>
                     <button
@@ -665,6 +667,15 @@ export default function NarrativesPage() {
                         : n.itemCount > 3 ? `+ ${n.itemCount - 3} more` : "show all"}
                     </button>
                   </div>
+                  {n.trackedEntities?.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--ink-10)" }}>
+                      {n.trackedEntities.map((e) => (
+                        <span key={e.id} style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "2px 8px", borderRadius: 99, background: "color-mix(in oklch, var(--accent) 8%, var(--paper))", color: "var(--ink-60)", border: "1px solid color-mix(in oklch, var(--accent) 18%, transparent)", whiteSpace: "nowrap" }}>
+                          {e.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}

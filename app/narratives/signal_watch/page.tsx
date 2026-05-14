@@ -46,6 +46,7 @@ type Cluster = {
   narrativeSummary: string | null;
   topItems: ClusterItem[];
   platforms: string[];
+  trackedEntities: Array<{ id: string; label: string }>;
 };
 
 function cleanTitle(raw: string | null): string | null {
@@ -340,6 +341,7 @@ export default function SignalWatchPage() {
 
                   <div className="cluster-card-foot" style={{ marginTop: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--ink-40)" }}>Source</span>
                       {cluster.platforms.map((p) => <PlatformChip key={p} platform={p} size="sm" />)}
                     </div>
                     {cluster.itemCount > 3 && (
@@ -348,6 +350,15 @@ export default function SignalWatchPage() {
                       </button>
                     )}
                   </div>
+                  {cluster.trackedEntities?.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--ink-10)" }}>
+                      {cluster.trackedEntities.map((e) => (
+                        <span key={e.id} style={{ fontSize: 10, fontFamily: "var(--font-mono)", padding: "2px 8px", borderRadius: 99, background: "color-mix(in oklch, var(--accent) 8%, var(--paper))", color: "var(--ink-60)", border: "1px solid color-mix(in oklch, var(--accent) 18%, transparent)", whiteSpace: "nowrap" }}>
+                          {e.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}
