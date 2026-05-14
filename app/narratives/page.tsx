@@ -26,6 +26,7 @@ type ClusterItem = {
   url: string | null;
   platform: string;
   publishedAt: string | null;
+  ingestedAt: string;
 };
 
 type ExpandedData = {
@@ -364,29 +365,25 @@ export default function NarrativesPage() {
   function renderExpandedItems(narrative: Narrative) {
     const data = expandedData[narrative.id];
     if (!data) return null;
-    const { items, merges } = data;
+    const { items } = data;
 
-    const originalItems = items.filter((i) => !i.mergeId);
-    const mergeGroups = Object.entries(merges)
-      .map(([mergeId, merge]) => ({ mergeId, merge, items: items.filter((i) => i.mergeId === mergeId) }))
-      .filter((g) => g.items.length > 0)
-      .sort((a, b) => new Date(a.merge.absorbedFirstSeenAt).getTime() - new Date(b.merge.absorbedFirstSeenAt).getTime());
-
-    const hasWaves = mergeGroups.length > 0;
+    const byDay = new Map<string, ClusterItem[]>();
+    for (const item of items) {
+      const day = shortDate(item.ingestedAt);
+      if (!byDay.has(day)) byDay.set(day, []);
+      byDay.get(day)!.push(item);
+    }
+    const dayGroups = [...byDay.entries()].sort(
+      (a, b) => new Date(a[1][0].ingestedAt).getTime() - new Date(b[1][0].ingestedAt).getTime()
+    );
+    const multiDay = dayGroups.length > 1;
 
     return (
       <div className="cluster-card-items">
-        {hasWaves && originalItems.length > 0 && (
-          <WaveHeader label={`Original · ${shortDate(narrative.firstSeenAt)}`} isFirst />
-        )}
-        {originalItems.map((item, i) => renderItemRow(item, i, narrative.id))}
-        {mergeGroups.map(({ mergeId, merge, items: waveItems }, gi) => (
-          <div key={mergeId}>
-            <WaveHeader
-              label={`Merged from "${merge.absorbedLabel ?? "Unnamed"}" · ${shortDate(merge.ingestedFirstAt)} → ${shortDate(merge.ingestedLastAt)} · ${merge.absorbedItemCount} items`}
-              isFirst={!hasWaves || (originalItems.length === 0 && gi === 0)}
-            />
-            {waveItems.map((item, i) => renderItemRow(item, i, narrative.id))}
+        {dayGroups.map(([day, dayItems], gi) => (
+          <div key={day}>
+            {multiDay && <WaveHeader label={day} isFirst={gi === 0} />}
+            {dayItems.map((item, i) => renderItemRow(item, i, narrative.id))}
           </div>
         ))}
       </div>

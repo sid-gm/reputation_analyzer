@@ -16,6 +16,7 @@ type ClusterItem = {
   url: string | null;
   platform: string;
   publishedAt: string | null;
+  ingestedAt: string;
 };
 
 type MergeInfo = {
@@ -203,27 +204,22 @@ export default function NoisePage() {
                         </span>
                       </div>
                     );
-                    if (!isExpanded || !expanded?.merges || Object.keys(expanded.merges).length === 0) {
-                      return <div className="cluster-card-items">{displayItems.map(renderItem)}</div>;
+                    const byDay = new Map<string, ClusterItem[]>();
+                    for (const item of displayItems) {
+                      const day = shortDate(item.ingestedAt);
+                      if (!byDay.has(day)) byDay.set(day, []);
+                      byDay.get(day)!.push(item);
                     }
-                    const originalItems = displayItems.filter((i) => !i.mergeId);
-                    const mergeGroups = Object.entries(expanded.merges)
-                      .map(([mergeId, merge]) => ({ mergeId, merge, items: displayItems.filter((i) => i.mergeId === mergeId) }))
-                      .filter((g) => g.items.length > 0)
-                      .sort((a, b) => new Date(a.merge.ingestedFirstAt).getTime() - new Date(b.merge.ingestedFirstAt).getTime());
+                    const dayGroups = [...byDay.entries()].sort(
+                      (a, b) => new Date(a[1][0].ingestedAt).getTime() - new Date(b[1][0].ingestedAt).getTime()
+                    );
+                    const multiDay = dayGroups.length > 1;
                     return (
                       <div className="cluster-card-items">
-                        {originalItems.length > 0 && mergeGroups.length > 0 && (
-                          <WaveHeader label="Original" isFirst />
-                        )}
-                        {originalItems.map(renderItem)}
-                        {mergeGroups.map(({ mergeId, merge, items: waveItems }, gi) => (
-                          <div key={mergeId}>
-                            <WaveHeader
-                              label={`Merged from "${merge.absorbedLabel ?? "Unnamed"}" · ${shortDate(merge.ingestedFirstAt)} → ${shortDate(merge.ingestedLastAt)} · ${merge.absorbedItemCount} items`}
-                              isFirst={originalItems.length === 0 && gi === 0}
-                            />
-                            {waveItems.map(renderItem)}
+                        {dayGroups.map(([day, dayItems], gi) => (
+                          <div key={day}>
+                            {multiDay && <WaveHeader label={day} isFirst={gi === 0} />}
+                            {dayItems.map(renderItem)}
                           </div>
                         ))}
                       </div>

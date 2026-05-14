@@ -56,7 +56,7 @@ export async function GET(
   }
 
   const displayable = dedupeItems(
-    rows.filter((i) => i.title || i.body || i.url).map(({ ingestedAt: _, ...rest }) => rest)
+    rows.filter((i) => i.title || i.body || i.url).map((r) => ({ ...r, ingestedAt: r.ingestedAt.toISOString() }))
   );
 
   // Fetch merge records for this cluster (as surviving cluster)
