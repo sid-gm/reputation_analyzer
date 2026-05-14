@@ -298,6 +298,9 @@ export default function NarrativesPage() {
   const [editingNarrativeId, setEditingNarrativeId] = useState<string | null>(null);
   const [editingNarrativeDraft, setEditingNarrativeDraft] = useState("");
   const [savingNarrative, setSavingNarrative] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [editingLabelDraft, setEditingLabelDraft] = useState("");
+  const [savingLabel, setSavingLabel] = useState(false);
 
   const fetchNarratives = useCallback(async () => {
     setLoading(true);
@@ -358,6 +361,18 @@ export default function NarrativesPage() {
     });
     setSavingPeriod(false);
     setEditingPeriod(null);
+  };
+
+  const saveLabel = async (narrativeId: string, label: string) => {
+    setSavingLabel(true);
+    await fetch(`/api/clusters/${narrativeId}/label`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label.trim() || null }),
+    });
+    setNarratives((prev) => prev.map((n) => n.id === narrativeId ? { ...n, label: label.trim() || null } : n));
+    setSavingLabel(false);
+    setEditingLabelId(null);
   };
 
   const saveNarrative = async (clusterId: string, narrative: string) => {
@@ -558,8 +573,29 @@ export default function NarrativesPage() {
                         </span>
                       </div>
                       <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-80)", lineHeight: 1.3 }}>
-                        {n.label ?? (
-                          <span style={{ color: "var(--ink-40)", fontWeight: 400, fontStyle: "italic" }}>Unnamed narrative</span>
+                        {editingLabelId === n.id ? (
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <input
+                              autoFocus
+                              value={editingLabelDraft}
+                              onChange={(e) => setEditingLabelDraft(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") saveLabel(n.id, editingLabelDraft); if (e.key === "Escape") setEditingLabelId(null); }}
+                              placeholder="Narrative name"
+                              style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: "inherit", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 7px", background: "var(--paper)", color: "var(--ink-80)" }}
+                            />
+                            <button className="btn" style={{ fontSize: 11, padding: "2px 8px" }} disabled={savingLabel} onClick={() => saveLabel(n.id, editingLabelDraft)}>{savingLabel ? "…" : "Save"}</button>
+                            <button className="btn-ghost btn" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setEditingLabelId(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <span
+                            style={{ cursor: "text" }}
+                            title="Click to edit name"
+                            onClick={() => { setEditingLabelId(n.id); setEditingLabelDraft(n.label ?? ""); }}
+                          >
+                            {n.label ?? (
+                              <span style={{ color: "var(--ink-40)", fontWeight: 400, fontStyle: "italic" }}>Unnamed narrative</span>
+                            )}
+                          </span>
                         )}
                       </div>
                     </div>

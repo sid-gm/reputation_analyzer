@@ -358,6 +358,9 @@ export default function ClustersPage() {
   const [editingPeriod, setEditingPeriod] = useState<{ clusterId: string; date: string } | null>(null);
   const [editingPeriodDraft, setEditingPeriodDraft] = useState("");
   const [savingPeriod, setSavingPeriod] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [editingLabelDraft, setEditingLabelDraft] = useState("");
+  const [savingLabel, setSavingLabel] = useState(false);
 
   // Merge mode
   const [mergeMode, setMergeMode] = useState(false);
@@ -503,6 +506,18 @@ export default function ClustersPage() {
 
   const toggleSummary = (id: string) =>
     setSummaryExpanded((prev) => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+
+  const saveLabel = async (clusterId: string, label: string) => {
+    setSavingLabel(true);
+    await fetch(`/api/clusters/${clusterId}/label`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label.trim() || null }),
+    });
+    setClusterList((prev) => prev.map((c) => c.id === clusterId ? { ...c, label: label.trim() || null } : c));
+    setSavingLabel(false);
+    setEditingLabelId(null);
+  };
 
   const savePeriodNarrative = async (clusterId: string, date: string, narrative: string) => {
     setSavingPeriod(true);
@@ -738,9 +753,29 @@ export default function ClustersPage() {
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-40)" }}>↑{cluster.momentum.toFixed(1)}/day</span>
                         )}
                       </div>
-                      <span className="cluster-card-label">
-                        {cluster.label ?? <span style={{ color: "var(--ink-40)", fontWeight: 400, fontStyle: "italic" }}>Unnamed cluster</span>}
-                      </span>
+                      {editingLabelId === cluster.id ? (
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 2 }}>
+                          <input
+                            autoFocus
+                            value={editingLabelDraft}
+                            onChange={(e) => setEditingLabelDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") saveLabel(cluster.id, editingLabelDraft); if (e.key === "Escape") setEditingLabelId(null); }}
+                            placeholder="Cluster name"
+                            style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: "inherit", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 7px", background: "var(--paper)", color: "var(--ink-80)" }}
+                          />
+                          <button className="btn" style={{ fontSize: 11, padding: "2px 8px" }} disabled={savingLabel} onClick={() => saveLabel(cluster.id, editingLabelDraft)}>{savingLabel ? "…" : "Save"}</button>
+                          <button className="btn-ghost btn" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setEditingLabelId(null)}>Cancel</button>
+                        </div>
+                      ) : (
+                        <span
+                          className="cluster-card-label"
+                          style={{ cursor: "text" }}
+                          title="Click to edit name"
+                          onClick={() => { setEditingLabelId(cluster.id); setEditingLabelDraft(cluster.label ?? ""); }}
+                        >
+                          {cluster.label ?? <span style={{ color: "var(--ink-40)", fontWeight: 400, fontStyle: "italic" }}>Unnamed cluster</span>}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
                       <span className="cluster-card-count">{cluster.itemCount} items</span>
