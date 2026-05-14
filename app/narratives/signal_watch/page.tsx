@@ -27,9 +27,12 @@ type MergeInfo = {
   ingestedLastAt: string;
 };
 
+type PeriodNarrative = { aiNarrative: string | null; analystNarrative: string | null };
+
 type ExpandedData = {
   items: ClusterItem[];
   merges: Record<string, MergeInfo>;
+  periodNarratives: Record<string, PeriodNarrative>;
 };
 
 type Cluster = {
@@ -112,6 +115,9 @@ export default function SignalWatchPage() {
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [expandedData, setExpandedData] = useState<Record<string, ExpandedData>>({});
+  const [editingPeriod, setEditingPeriod] = useState<{ clusterId: string; date: string } | null>(null);
+  const [editingPeriodDraft, setEditingPeriodDraft] = useState("");
+  const [savingPeriod, setSavingPeriod] = useState(false);
 
   const fetchClusters = useCallback(async () => {
     setLoading(true);
@@ -135,6 +141,31 @@ export default function SignalWatchPage() {
     }
     setExpandedIds((prev) => new Set(prev).add(id));
   }, [expandedIds, expandedData]);
+
+  const savePeriodNarrative = useCallback(async (clusterId: string, date: string, narrative: string) => {
+    setSavingPeriod(true);
+    await fetch(`/api/clusters/${clusterId}/period-narrative`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, narrative }),
+    });
+    setExpandedData((prev) => {
+      const cluster = prev[clusterId];
+      if (!cluster) return prev;
+      return {
+        ...prev,
+        [clusterId]: {
+          ...cluster,
+          periodNarratives: {
+            ...cluster.periodNarratives,
+            [date]: { ...(cluster.periodNarratives[date] ?? { aiNarrative: null }), analystNarrative: narrative },
+          },
+        },
+      };
+    });
+    setEditingPeriod(null);
+    setSavingPeriod(false);
+  }, []);
 
   const signalCount = clusters.filter((c) => c.analystClassification === "signal").length;
   const watchCount = clusters.filter((c) => c.analystClassification === "watch").length;
@@ -237,24 +268,72 @@ export default function SignalWatchPage() {
                         </span>
                       </div>
                     );
+                    const periodNarratives = isExpanded ? (expanded?.periodNarratives ?? {}) : {};
                     const byDay = new Map<string, ClusterItem[]>();
                     for (const item of displayItems) {
-                      const day = shortDate(item.ingestedAt);
+                      const day = item.ingestedAt.slice(0, 10);
                       if (!byDay.has(day)) byDay.set(day, []);
                       byDay.get(day)!.push(item);
                     }
                     const dayGroups = [...byDay.entries()].sort(
-                      (a, b) => new Date(a[1][0].ingestedAt).getTime() - new Date(b[1][0].ingestedAt).getTime()
+                      (a, b) => new Date(b[1][0].ingestedAt).getTime() - new Date(a[1][0].ingestedAt).getTime()
                     );
                     const multiDay = dayGroups.length > 1;
                     return (
                       <div className="cluster-card-items">
-                        {dayGroups.map(([day, dayItems], gi) => (
-                          <div key={day}>
-                            {multiDay && <WaveHeader label={day} isFirst={gi === 0} />}
-                            {dayItems.map(renderItem)}
-                          </div>
-                        ))}
+                        {dayGroups.map(([day, dayItems], gi) => {
+                          const pn = periodNarratives[day];
+                          const periodText = pn?.analystNarrative ?? pn?.aiNarrative ?? null;
+                          const isEditingThis = editingPeriod?.clusterId === cluster.id && editingPeriod?.date === day;
+                          const sortedItems = [...dayItems].sort(
+                            (a, b) => new Date(b.ingestedAt).getTime() - new Date(a.ingestedAt).getTime()
+                          );
+                          return (
+                            <div key={day}>
+                              {multiDay && <WaveHeader label={shortDate(day + "T12:00:00Z")} isFirst={gi === 0} />}
+                              {isExpanded && (
+                                isEditingThis ? (
+                                  <div style={{ marginBottom: 6 }}>
+                                    <textarea
+                                      autoFocus
+                                      value={editingPeriodDraft}
+                                      onChange={(e) => setEditingPeriodDraft(e.target.value)}
+                                      rows={2}
+                                      style={{
+                                        width: "100%", fontSize: 12, fontFamily: "var(--font-sans)",
+                                        color: "var(--ink-60)", background: "var(--paper)",
+                                        border: "1px solid var(--accent)", borderRadius: 4,
+                                        padding: "4px 6px", resize: "vertical", boxSizing: "border-box",
+                                      }}
+                                    />
+                                    <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                                      <button
+                                        className="cluster-card-more"
+                                        disabled={savingPeriod}
+                                        onClick={() => savePeriodNarrative(cluster.id, day, editingPeriodDraft)}
+                                      >
+                                        {savingPeriod ? "saving…" : "save"}
+                                      </button>
+                                      <button className="cluster-card-more" onClick={() => setEditingPeriod(null)}>cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div
+                                    onClick={() => { setEditingPeriod({ clusterId: cluster.id, date: day }); setEditingPeriodDraft(periodText ?? ""); }}
+                                    style={{
+                                      fontSize: 12, color: "var(--ink-50)", lineHeight: 1.45,
+                                      marginBottom: 5, cursor: "text",
+                                      fontStyle: periodText ? "normal" : "italic",
+                                    }}
+                                  >
+                                    {periodText ?? <span style={{ color: "var(--ink-30)" }}>Add note for {shortDate(day + "T12:00:00Z")}…</span>}
+                                  </div>
+                                )
+                              )}
+                              {sortedItems.map(renderItem)}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}
