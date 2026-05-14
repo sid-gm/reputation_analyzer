@@ -129,6 +129,7 @@ input, select, textarea { font: inherit; color: inherit; }
 .nav-count { font-family: var(--font-mono); font-size: 10.5px; padding: 1px 6px; border-radius: 9px; background: var(--ink-10); color: var(--ink-60); min-width: 22px; text-align: center; }
 .nav-stage { font-family: var(--font-mono); font-size: 10px; color: var(--ink-40); padding: 1px 5px; border: 1px dashed var(--border); border-radius: 3px; }
 .nav-item-sub { padding-left: 22px; }
+.nav-item-subsub { padding-left: 36px; font-size: 12px; }
 .nav-item-soon { color: var(--ink-50); cursor: default; }
 .nav-item-soon:hover { background: transparent; color: var(--ink-50); }
 

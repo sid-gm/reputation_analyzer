@@ -10,7 +10,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json() as { classification: string | null; note?: string };
 
-  const allowed = ["narrative", "noise", null];
+  const allowed = ["narrative", "noise", "signal", "watch", null];
   if (!allowed.includes(body.classification)) {
     return NextResponse.json({ error: "Invalid classification" }, { status: 400 });
   }

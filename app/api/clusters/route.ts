@@ -9,10 +9,27 @@ export async function GET(req: Request) {
   const sort = searchParams.get("sort") ?? "activity";
   const hideSingletons = searchParams.get("hideSingletons") === "true";
   const classificationFilter = searchParams.get("classification") ?? "all";
+  const analystClassificationFilter = searchParams.get("analystClassification") ?? undefined;
 
   const baseConditions = [isNull(clusters.archivedAt)];
   if (entityId) baseConditions.push(eq(clusters.entityId, entityId));
   if (hideSingletons) baseConditions.push(gte(clusters.itemCount, 2));
+
+  // Analyst classification filter (explicit reviewer decisions)
+  if (analystClassificationFilter === "noise") {
+    baseConditions.push(eq(clusters.analystClassification, "noise"));
+  } else if (analystClassificationFilter === "signal_watch") {
+    baseConditions.push(
+      or(
+        eq(clusters.analystClassification, "signal"),
+        eq(clusters.analystClassification, "watch")
+      )!
+    );
+  } else if (analystClassificationFilter === "signal") {
+    baseConditions.push(eq(clusters.analystClassification, "signal"));
+  } else if (analystClassificationFilter === "watch") {
+    baseConditions.push(eq(clusters.analystClassification, "watch"));
+  }
 
   // Effective classification = analystClassification if set, else classification
   if (classificationFilter === "narrative") {

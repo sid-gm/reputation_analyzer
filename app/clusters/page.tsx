@@ -97,6 +97,8 @@ function ClassificationPill({ classification }: { classification: string }) {
   const styles: Record<string, { label: string; color: string }> = {
     narrative:    { label: "NARRATIVE",    color: "var(--accent)" },
     noise:        { label: "NOISE",        color: "var(--ink-30)" },
+    signal:       { label: "SIGNAL",       color: "var(--ok)" },
+    watch:        { label: "WATCH",        color: "var(--warn)" },
     unclassified: { label: "UNCLASSIFIED", color: "var(--ink-20)" },
   };
   const s = styles[classification] ?? styles.unclassified;
@@ -196,7 +198,7 @@ function SignalDot({ signal }: { signal: string }) {
 function OverrideMenu({ clusterId, current, onDone }: { clusterId: string; current: string | null; onDone: () => void }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const apply = async (val: "narrative" | "noise" | null) => {
+  const apply = async (val: "narrative" | "noise" | "signal" | "watch" | null) => {
     setBusy(true);
     await fetch(`/api/clusters/${clusterId}/classify`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ classification: val }) });
     setBusy(false); setOpen(false); onDone();
@@ -205,9 +207,11 @@ function OverrideMenu({ clusterId, current, onDone }: { clusterId: string; curre
     <div style={{ position: "relative" }}>
       <button className="btn-ghost" style={{ fontSize: 14, padding: "0 6px", lineHeight: 1 }} onClick={() => setOpen((v) => !v)} disabled={busy} title="Analyst override">⋯</button>
       {open && (
-        <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 100, background: "var(--paper)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 160, padding: "4px 0" }}>
+        <div style={{ position: "absolute", right: 0, top: "100%", zIndex: 100, background: "var(--paper)", border: "1px solid var(--border)", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", minWidth: 170, padding: "4px 0" }}>
           <div style={{ padding: "4px 12px 2px", fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-30)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Analyst override</div>
           {current !== "narrative" && <button className="dropdown-item" onClick={() => apply("narrative")}>Mark as Narrative</button>}
+          {current !== "signal"    && <button className="dropdown-item" onClick={() => apply("signal")}>Mark as Signal</button>}
+          {current !== "watch"     && <button className="dropdown-item" onClick={() => apply("watch")}>Mark as Watch</button>}
           {current !== "noise"     && <button className="dropdown-item" onClick={() => apply("noise")}>Mark as Noise</button>}
           {current !== null        && <button className="dropdown-item" style={{ color: "var(--ink-40)" }} onClick={() => apply(null)}>Reset override</button>}
           <button className="dropdown-item" onClick={() => setOpen(false)} style={{ color: "var(--ink-30)" }}>Cancel</button>
