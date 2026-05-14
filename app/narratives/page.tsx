@@ -40,6 +40,9 @@ type Narrative = {
   narrativeStage: string | null;
   narrativeSummary: string | null;
   momentum: number | null;
+  peakMomentum: number | null;
+  velocity24h: number | null;
+  prevVelocity24h: number | null;
   classificationConfidence: number | null;
   analystClassification: string | null;
   analystNote: string | null;
@@ -76,7 +79,13 @@ function shortDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function StagePill({ stage }: { stage: string }) {
+function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum }: {
+  stage: string;
+  velocity24h?: number | null;
+  prevVelocity24h?: number | null;
+  peakMomentum?: number | null;
+}) {
+  const [hovered, setHovered] = useState(false);
   const styles: Record<string, { label: string; bg: string; color: string }> = {
     emerging:   { label: "EMERGING",   bg: "color-mix(in oklch, var(--ok) 15%, transparent)",     color: "var(--ok)" },
     developing: { label: "DEVELOPING", bg: "color-mix(in oklch, var(--accent) 15%, transparent)", color: "var(--accent)" },
@@ -85,13 +94,36 @@ function StagePill({ stage }: { stage: string }) {
   };
   const s = styles[stage];
   if (!s) return null;
+  const accel = (velocity24h ?? 0) - (prevVelocity24h ?? 0);
+  const fmt = (v: number | null | undefined) => v == null ? "—" : v.toFixed(1);
   return (
-    <span style={{
-      fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
-      textTransform: "uppercase", color: s.color, background: s.bg,
-      borderRadius: 3, padding: "2px 6px",
-    }}>
-      {s.label}
+    <span
+      style={{ position: "relative", display: "inline-block" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: s.color, background: s.bg,
+        borderRadius: 3, padding: "2px 6px", cursor: "default",
+      }}>
+        {s.label}
+      </span>
+      {hovered && (
+        <span style={{
+          position: "absolute", top: "calc(100% + 5px)", left: 0, zIndex: 9000,
+          background: "var(--ink)", color: "var(--paper)", borderRadius: 5,
+          padding: "6px 10px", fontSize: 11, fontFamily: "var(--font-mono)",
+          whiteSpace: "nowrap", pointerEvents: "none",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          lineHeight: 1.7,
+        }}>
+          <span style={{ opacity: 0.5 }}>velocity24h</span>{"  "}{fmt(velocity24h)}/day{"\n"}
+          <span style={{ opacity: 0.5 }}>prev24h   </span>{"  "}{fmt(prevVelocity24h)}/day{"\n"}
+          <span style={{ opacity: 0.5 }}>accel     </span>{"  "}{accel >= 0 ? "+" : ""}{fmt(accel)}/day{"\n"}
+          <span style={{ opacity: 0.5 }}>peak      </span>{"  "}{fmt(peakMomentum)}/day
+        </span>
+      )}
     </span>
   );
 }
@@ -377,7 +409,7 @@ export default function NarrativesPage() {
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-                        {n.narrativeStage && <StagePill stage={n.narrativeStage} />}
+                        {n.narrativeStage && <StagePill stage={n.narrativeStage} velocity24h={n.velocity24h} prevVelocity24h={n.prevVelocity24h} peakMomentum={n.peakMomentum} />}
                         {n.classificationConfidence != null && (
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-30)" }}>
                             {Math.round(n.classificationConfidence * 100)}% conf

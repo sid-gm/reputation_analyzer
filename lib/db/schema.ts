@@ -111,6 +111,8 @@ export const clusters = pgTable("clusters", {
   narrativeSummary: text("narrative_summary"),
   momentum: real("momentum"),
   peakMomentum: real("peak_momentum"),
+  velocity24h: real("velocity_24h"),
+  prevVelocity24h: real("prev_velocity_24h"),
   classificationConfidence: real("classification_confidence"),
   analystClassification: text("analyst_classification"), // 'narrative' | 'noise'
   analystNote: text("analyst_note"),

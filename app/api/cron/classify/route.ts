@@ -129,6 +129,8 @@ export async function GET(req: Request) {
           classificationConfidence: result.confidence,
           momentum,
           peakMomentum: newPeakMomentum,
+          velocity24h,
+          prevVelocity24h,
           classifiedAt: now,
         })
         .where(eq(clusters.id, cluster.id));
