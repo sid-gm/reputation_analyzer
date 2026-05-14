@@ -9,7 +9,6 @@ export async function GET(req: Request) {
   const sort = searchParams.get("sort") ?? "activity";
   const hideSingletons = searchParams.get("hideSingletons") === "true";
   const classificationFilter = searchParams.get("classification") ?? "all";
-  const confidenceFilter = searchParams.get("confidence") ?? "all";
 
   const baseConditions = [isNull(clusters.archivedAt)];
   if (entityId) baseConditions.push(eq(clusters.entityId, entityId));
@@ -58,7 +57,6 @@ export async function GET(req: Request) {
       peakMomentum: clusters.peakMomentum,
       velocity24h: clusters.velocity24h,
       prevVelocity24h: clusters.prevVelocity24h,
-      classificationConfidence: clusters.classificationConfidence,
       analystClassification: clusters.analystClassification,
       analystNote: clusters.analystNote,
     })
@@ -66,14 +64,7 @@ export async function GET(req: Request) {
     .where(and(...baseConditions))
     .orderBy(orderBy);
 
-  // Apply confidence filter in memory (simpler than SQL)
-  const filtered = confidenceFilter === "all" ? allClusters : allClusters.filter((c) => {
-    const conf = c.classificationConfidence ?? 0;
-    if (confidenceFilter === "high")   return conf >= 0.8;
-    if (confidenceFilter === "medium") return conf >= 0.5 && conf < 0.8;
-    if (confidenceFilter === "low")    return conf < 0.5;
-    return true;
-  });
+  const filtered = allClusters;
 
   // Stats (no extra filters — always show total picture)
   const statsConditions = [isNull(clusters.archivedAt)];

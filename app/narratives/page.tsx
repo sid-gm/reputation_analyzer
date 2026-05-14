@@ -43,7 +43,6 @@ type Narrative = {
   peakMomentum: number | null;
   velocity24h: number | null;
   prevVelocity24h: number | null;
-  classificationConfidence: number | null;
   analystClassification: string | null;
   analystNote: string | null;
   effectiveClassification: string;
@@ -484,11 +483,6 @@ export default function NarrativesPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
                         {n.narrativeStage && <StagePill stage={n.narrativeStage} velocity24h={n.velocity24h} prevVelocity24h={n.prevVelocity24h} peakMomentum={n.peakMomentum} firstSeenAt={n.firstSeenAt} />}
-                        {n.classificationConfidence != null && (
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-30)" }}>
-                            {Math.round(n.classificationConfidence * 100)}% conf
-                          </span>
-                        )}
                         {n.momentum != null && n.momentum > 0 && (
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>
                             ↑{n.momentum.toFixed(1)}/day

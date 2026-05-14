@@ -47,7 +47,6 @@ type Cluster = {
   peakMomentum: number | null;
   velocity24h: number | null;
   prevVelocity24h: number | null;
-  classificationConfidence: number | null;
   analystClassification: string | null;
   analystNote: string | null;
   topItems: ClusterItem[];
@@ -336,7 +335,7 @@ export default function ClustersPage() {
   const [sort, setSort] = useState("activity");
   const [hideSingletons, setHideSingletons] = useState(false);
   const [classificationFilter, setClassificationFilter] = useState("all");
-  const [confidenceFilter, setConfidenceFilter] = useState("all");
+
   const [loading, setLoading] = useState(true);
   const [clusterRunning, setClusterRunning] = useState(false);
   const [clusterResult, setClusterResult] = useState<string | null>(null);
@@ -359,14 +358,14 @@ export default function ClustersPage() {
 
   const fetchClusters = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ sort, hideSingletons: String(hideSingletons), classification: classificationFilter, confidence: confidenceFilter });
+    const params = new URLSearchParams({ sort, hideSingletons: String(hideSingletons), classification: classificationFilter });
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/clusters?${params}`);
     const data = await res.json();
     setClusterList(data.clusters ?? []);
     setStats(data.stats ?? null);
     setLoading(false);
-  }, [entityId, sort, hideSingletons, classificationFilter, confidenceFilter]);
+  }, [entityId, sort, hideSingletons, classificationFilter]);
 
   useEffect(() => { fetch("/api/entities").then((r) => r.json()).then(setEntities); }, []);
   useEffect(() => { fetchClusters(); }, [fetchClusters]);
@@ -638,15 +637,6 @@ export default function ClustersPage() {
             </select>
           </div>
           <div className="filter-group">
-            <span className="filter-label">Confidence</span>
-            <select className="select" value={confidenceFilter} onChange={(e) => setConfidenceFilter(e.target.value)}>
-              <option value="all">All</option>
-              <option value="high">High ≥80%</option>
-              <option value="medium">Medium 50–79%</option>
-              <option value="low">Low &lt;50%</option>
-            </select>
-          </div>
-          <div className="filter-group">
             <span className="filter-label">Sort</span>
             <select className="select" value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="activity">Latest activity</option>
@@ -692,9 +682,6 @@ export default function ClustersPage() {
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
                         <ClassificationPill classification={cluster.effectiveClassification} />
                         {cluster.narrativeStage && cluster.effectiveClassification === "narrative" && <StagePill stage={cluster.narrativeStage} velocity24h={cluster.velocity24h} prevVelocity24h={cluster.prevVelocity24h} peakMomentum={cluster.peakMomentum} firstSeenAt={cluster.firstSeenAt} />}
-                        {cluster.classificationConfidence != null && (
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-30)" }}>{Math.round(cluster.classificationConfidence * 100)}% conf</span>
-                        )}
                         {cluster.momentum != null && cluster.momentum > 0 && (
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-40)" }}>↑{cluster.momentum.toFixed(1)}/day</span>
                         )}

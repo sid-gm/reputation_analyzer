@@ -126,7 +126,6 @@ export async function GET(req: Request) {
           classification: result.classification,
           narrativeStage: narrativeStage ?? undefined,
           narrativeSummary: result.narrativeSummary,
-          classificationConfidence: result.confidence,
           momentum,
           peakMomentum: newPeakMomentum,
           velocity24h,

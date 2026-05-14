@@ -4,7 +4,6 @@ import { openai } from "@ai-sdk/openai";
 export type ClusterClassificationResult = {
   classification: "narrative" | "noise";
   narrativeSummary: string | null;
-  confidence: number;
 };
 
 export type ItemSignalsResult = {
@@ -42,7 +41,7 @@ Classify this cluster:
 - "noise": keyword mentions without a story (press releases, job listings, generic name-drops, unrelated content)
 
 Respond with JSON only, no markdown:
-{"classification":"narrative"|"noise","narrativeSummary":"1-2 sentence summary if narrative, null if noise","confidence":0.0-1.0}`,
+{"classification":"narrative"|"noise","narrativeSummary":"1-2 sentence summary if narrative, null if noise"}`,
     maxOutputTokens: 200,
   });
 
@@ -52,10 +51,9 @@ Respond with JSON only, no markdown:
     return {
       classification: parsed.classification === "narrative" ? "narrative" : "noise",
       narrativeSummary: parsed.narrativeSummary ?? null,
-      confidence: Math.max(0, Math.min(1, parsed.confidence ?? 0.5)),
     };
   } catch {
-    return { classification: "noise", narrativeSummary: null, confidence: 0.3 };
+    return { classification: "noise", narrativeSummary: null };
   }
 }
 
