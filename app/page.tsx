@@ -34,10 +34,18 @@ function relativeTime(iso: string | null) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function pseudoSpark(seed: number, len = 16): number[] {
-  return Array.from({ length: len }, (_, i) =>
-    Math.abs(Math.sin(i * 0.7 + seed) * 40 + 20)
-  );
+function fillSeries(
+  sparse: { date: string; count: number }[],
+  slots: number,
+  stepMs: number
+): number[] {
+  const map = new Map(sparse.map((r) => [r.date, r.count]));
+  const now = Date.now();
+  return Array.from({ length: slots }, (_, i) => {
+    const t = new Date(now - (slots - 1 - i) * stepMs);
+    const key = t.toISOString().slice(0, 10);
+    return map.get(key) ?? 0;
+  });
 }
 
 export default function FeedPage() {
@@ -56,6 +64,7 @@ export default function FeedPage() {
   const [clusterRunning, setClusterRunning] = useState(false);
   const [clusterResult, setClusterResult] = useState<string | null>(null);
   const [platformCounts, setPlatformCounts] = useState<Record<string, number>>({ all: 0 });
+  const [totalSpark, setTotalSpark] = useState<number[]>([]);
 
   const runEmbed = useCallback(async () => {
     setEmbedRunning(true);
@@ -116,6 +125,12 @@ export default function FeedPage() {
     if (activeCompanyId) fetch(`/api/entities?companyId=${activeCompanyId}`).then((r) => r.json()).then(setEntities);
   }, [activeCompanyId]);
 
+  useEffect(() => {
+    fetch("/api/items/timeseries?days=30")
+      .then((r) => r.json())
+      .then((d) => setTotalSpark(fillSeries(d.series, 30, 86400000)));
+  }, []);
+
   useEffect(() => { fetchItems(); setPage(1); }, [fetchItems]);
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
 
@@ -135,9 +150,6 @@ export default function FeedPage() {
   const safePage = Math.min(page, totalPages);
   const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-
-  const spark1 = pseudoSpark(1);
-  const spark2 = pseudoSpark(2);
 
   return (
     <>
@@ -182,23 +194,11 @@ export default function FeedPage() {
           <div className="kpi">
             <div className="kpi-top">
               <div className="kpi-label">Total items</div>
-              <Sparkline values={spark1} color="var(--ink-40)" />
+              <Sparkline values={totalSpark} color="var(--ink-40)" />
             </div>
             <div className="kpi-mid">
               <div className="kpi-value">{platformCounts.all}</div>
               <div className="kpi-delta kpi-delta-up">▲ ingested</div>
-            </div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-top">
-              <div className="kpi-label">Sources active</div>
-              <Sparkline values={spark2} color="var(--accent)" fill />
-            </div>
-            <div className="kpi-mid">
-              <div className="kpi-value">
-                {Object.keys(PLATFORMS).filter((k) => (platformCounts[k] ?? 0) > 0).length}
-              </div>
-              <div className="kpi-delta kpi-delta-flat">→ of 5</div>
             </div>
           </div>
           <div className="kpi">

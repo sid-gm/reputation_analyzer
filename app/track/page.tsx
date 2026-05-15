@@ -20,10 +20,18 @@ const emptyForm = {
   googleAlertsFeedUrl: "",
 };
 
-function pseudoSpark(seed: number, base: number): number[] {
-  return Array.from({ length: 16 }, (_, i) =>
-    Math.abs(Math.sin(i * 0.7 + seed) * base * 0.5 + base * 0.4)
-  );
+function fillSeries(
+  sparse: { date: string; count: number }[],
+  slots: number,
+  stepMs: number
+): number[] {
+  const map = new Map(sparse.map((r) => [r.date, r.count]));
+  const now = Date.now();
+  return Array.from({ length: slots }, (_, i) => {
+    const t = new Date(now - (slots - 1 - i) * stepMs);
+    const key = t.toISOString().slice(0, 10);
+    return map.get(key) ?? 0;
+  });
 }
 
 export default function TrackPage() {
@@ -35,6 +43,8 @@ export default function TrackPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [sparklines, setSparklines] = useState<Record<string, number[]>>({});
+  const [entityTotals, setEntityTotals] = useState<Record<string, number>>({});
 
   const load = () => {
     if (!activeCompanyId) return;
@@ -42,6 +52,24 @@ export default function TrackPage() {
   };
 
   useEffect(() => { load(); }, [activeCompanyId]);
+
+  useEffect(() => {
+    if (entities.length === 0) return;
+    Promise.all(
+      entities.map((e) =>
+        fetch(`/api/items/timeseries?entityId=${e.id}&days=14`)
+          .then((r) => r.json())
+          .then((d) => {
+            const series = fillSeries(d.series, 14, 86400000);
+            const total = (d.series as { count: number }[]).reduce((s, r) => s + r.count, 0);
+            return [e.id, series, total] as const;
+          })
+      )
+    ).then((results) => {
+      setSparklines(Object.fromEntries(results.map(([id, s]) => [id, s])));
+      setEntityTotals(Object.fromEntries(results.map(([id, , t]) => [id, t])));
+    });
+  }, [entities]);
 
   const counts = useMemo(() => {
     const c = { all: entities.length, keyword: 0, executive: 0, product: 0 };
@@ -256,11 +284,11 @@ export default function TrackPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e, idx) => {
+              {filtered.map((e) => {
                 const sources = ["hackernews", "reddit", "twitter"].concat(
                   e.googleAlertsFeedUrl ? ["google_alerts"] : []
                 );
-                const spark = pseudoSpark(idx + 1, 40);
+                const spark = sparklines[e.id] ?? [];
                 return (
                   <tr key={e.id} className="entity-row">
                     <td>
@@ -287,7 +315,7 @@ export default function TrackPage() {
                     <td>
                       <div className="vol-cell">
                         <Sparkline values={spark} color="var(--ink-50)" height={20} />
-                        <span className="mono">—</span>
+                        <span className="mono">{entityTotals[e.id] ?? "—"}</span>
                       </div>
                     </td>
                     <td className="mono dim">

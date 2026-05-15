@@ -64,10 +64,20 @@ const SOURCE_DEFS: SourceDef[] = [
   },
 ];
 
-function pseudoSpark(seed: number): number[] {
-  return Array.from({ length: 24 }, (_, i) =>
-    Math.abs(Math.sin(i * 0.4 + seed) * 30 + 15)
-  );
+function fillSeries(
+  sparse: { date: string; count: number }[],
+  slots: number,
+  stepMs: number
+): number[] {
+  const map = new Map(sparse.map((r) => [r.date, r.count]));
+  const now = Date.now();
+  return Array.from({ length: slots }, (_, i) => {
+    const t = new Date(now - (slots - 1 - i) * stepMs);
+    const key = stepMs >= 86400000
+      ? t.toISOString().slice(0, 10)
+      : `${t.toISOString().slice(0, 13).replace("T", " ")}:00`;
+    return map.get(key) ?? 0;
+  });
 }
 
 export default function SourcesPage() {
@@ -80,6 +90,7 @@ export default function SourcesPage() {
   const [twitterStats, setTwitterStats] = useState<TwitterStats | null>(null);
   const [subreddits, setSubreddits] = useState<string[]>([]);
   const [subredditInput, setSubredditInput] = useState("");
+  const [sourceSparklines, setSourceSparklines] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
     fetch("/api/sources/status").then((r) => r.json()).then(setEnvStatus);
@@ -99,6 +110,15 @@ export default function SourcesPage() {
       fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
       fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
       fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
+
+      const platforms = ["hackernews", "reddit", "twitter", "google_alerts", "manual"];
+      Promise.all(
+        platforms.map((p) =>
+          fetch(`/api/items/timeseries?platform=${p}&groupBy=hour&days=1`)
+            .then((r) => r.json())
+            .then((d) => [p, fillSeries(d.series, 24, 3600000)] as const)
+        )
+      ).then((entries) => setSourceSparklines(Object.fromEntries(entries)));
     };
 
     refreshStats();
@@ -182,7 +202,7 @@ export default function SourcesPage() {
           {SOURCE_DEFS.map((s, idx) => {
             const status = isConnected(s.key) as "active" | "degraded" | "offline";
             const tone = status === "active" ? "ok" : status === "degraded" ? "warn" : "err";
-            const spark = pseudoSpark(idx + 1);
+            const spark = sourceSparklines[s.key] ?? [];
 
             const statsToday =
               s.key === "google_alerts" ? (gaStats ? gaStats.today : "—")
