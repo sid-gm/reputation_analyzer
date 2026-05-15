@@ -380,6 +380,17 @@ export default function NarrativesPage() {
     setEditingLabelId(null);
   };
 
+  const classifyNarrative = async (narrativeId: string, classification: "signal" | "watch" | "noise" | null) => {
+    await fetch(`/api/clusters/${narrativeId}/classify`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classification }),
+    });
+    setNarratives((prev) =>
+      prev.map((n) => n.id === narrativeId ? { ...n, analystClassification: classification } : n)
+    );
+  };
+
   const saveNarrative = async (clusterId: string, narrative: string) => {
     setSavingNarrative(true);
     await fetch(`/api/clusters/${clusterId}/narrative`, {
@@ -610,12 +621,34 @@ export default function NarrativesPage() {
                     </div>
                   </div>
 
-                  {/* Analyst override note */}
-                  {n.analystClassification && (
-                    <div style={{ fontSize: 11, color: "var(--ink-40)", fontStyle: "italic", marginBottom: 6 }}>
-                      Analyst confirmed: {n.analystNote ? `"${n.analystNote}"` : "narrative"}
-                    </div>
-                  )}
+                  {/* Analyst classify pills */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-30)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 2 }}>Mark:</span>
+                    {(["signal", "watch", "noise"] as const).map((val) => {
+                      const active = n.analystClassification === val;
+                      const color = val === "signal" ? "var(--ok)" : val === "watch" ? "var(--accent)" : "var(--ink-40)";
+                      return (
+                        <button
+                          key={val}
+                          onClick={() => classifyNarrative(n.id, active ? null : val)}
+                          style={{
+                            fontSize: 10,
+                            fontFamily: "var(--font-mono)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            padding: "2px 8px",
+                            borderRadius: 99,
+                            border: `1px solid ${active ? color : "var(--border)"}`,
+                            background: active ? `color-mix(in oklch, ${color} 15%, var(--paper))` : "transparent",
+                            color: active ? color : "var(--ink-40)",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {val}
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   {/* Narrative summary — click to edit */}
                   <div style={{ marginBottom: 10 }}>
