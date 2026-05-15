@@ -186,6 +186,9 @@ export default function NoisePage() {
   const [editingPeriod, setEditingPeriod] = useState<{ clusterId: string; date: string } | null>(null);
   const [editingPeriodDraft, setEditingPeriodDraft] = useState("");
   const [savingPeriod, setSavingPeriod] = useState(false);
+  const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
+  const [editingLabelDraft, setEditingLabelDraft] = useState("");
+  const [savingLabel, setSavingLabel] = useState(false);
 
   const fetchClusters = useCallback(async () => {
     if (!activeCompanyId) return;
@@ -236,6 +239,29 @@ export default function NoisePage() {
     setEditingPeriod(null);
     setSavingPeriod(false);
   }, []);
+
+  const classifyCluster = async (clusterId: string, classification: "signal" | "watch" | "noise" | null) => {
+    await fetch(`/api/clusters/${clusterId}/classify`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ classification }),
+    });
+    setClusters((prev) =>
+      prev.map((c) => c.id === clusterId ? { ...c, analystClassification: classification } : c)
+    );
+  };
+
+  const saveLabel = async (clusterId: string, label: string) => {
+    setSavingLabel(true);
+    await fetch(`/api/clusters/${clusterId}/label`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label.trim() || null }),
+    });
+    setClusters((prev) => prev.map((c) => c.id === clusterId ? { ...c, label: label.trim() || null } : c));
+    setSavingLabel(false);
+    setEditingLabelId(null);
+  };
 
   return (
     <>
@@ -302,14 +328,53 @@ export default function NoisePage() {
                           <StagePill stage={cluster.narrativeStage} velocity24h={cluster.velocity24h} prevVelocity24h={cluster.prevVelocity24h} peakMomentum={cluster.peakMomentum} firstSeenAt={cluster.firstSeenAt} />
                         )}
                       </div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-60)", lineHeight: 1.3 }}>
-                        {cluster.label ?? <span style={{ color: "var(--ink-30)", fontWeight: 400, fontStyle: "italic" }}>Unnamed cluster</span>}
+                      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-60)", lineHeight: 1.3, marginBottom: 6 }}>
+                        {editingLabelId === cluster.id ? (
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <input
+                              autoFocus
+                              value={editingLabelDraft}
+                              onChange={(e) => setEditingLabelDraft(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") saveLabel(cluster.id, editingLabelDraft); if (e.key === "Escape") setEditingLabelId(null); }}
+                              placeholder="Cluster name"
+                              style={{ flex: 1, fontSize: 14, fontWeight: 600, fontFamily: "inherit", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 7px", background: "var(--paper)", color: "var(--ink-80)" }}
+                            />
+                            <button className="btn" style={{ fontSize: 11, padding: "2px 8px" }} disabled={savingLabel} onClick={() => saveLabel(cluster.id, editingLabelDraft)}>{savingLabel ? "…" : "Save"}</button>
+                            <button className="btn-ghost btn" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => setEditingLabelId(null)}>Cancel</button>
+                          </div>
+                        ) : (
+                          <span style={{ cursor: "text" }} title="Click to edit name" onClick={() => { setEditingLabelId(cluster.id); setEditingLabelDraft(cluster.label ?? ""); }}>
+                            {cluster.label ?? <span style={{ color: "var(--ink-30)", fontWeight: 400, fontStyle: "italic" }}>Unnamed cluster</span>}
+                          </span>
+                        )}
                       </div>
                       {cluster.analystNote && (
-                        <div style={{ fontSize: 11, color: "var(--ink-40)", fontStyle: "italic", marginTop: 4 }}>
+                        <div style={{ fontSize: 11, color: "var(--ink-40)", fontStyle: "italic", marginBottom: 6 }}>
                           "{cluster.analystNote}"
                         </div>
                       )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-30)", textTransform: "uppercase", letterSpacing: "0.06em", marginRight: 2 }}>Mark:</span>
+                        {(["signal", "watch", "noise"] as const).map((val) => {
+                          const active = cluster.analystClassification === val;
+                          const color = val === "signal" ? "var(--ok)" : val === "watch" ? "var(--accent)" : "var(--ink-40)";
+                          return (
+                            <button
+                              key={val}
+                              onClick={() => classifyCluster(cluster.id, active ? null : val)}
+                              style={{
+                                fontSize: 10, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.06em",
+                                padding: "2px 8px", borderRadius: 99,
+                                border: `1px solid ${active ? color : "var(--border)"}`,
+                                background: active ? `color-mix(in oklch, ${color} 15%, var(--paper))` : "transparent",
+                                color: active ? color : "var(--ink-40)", cursor: "pointer",
+                              }}
+                            >
+                              {val}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-30)", flexShrink: 0, textAlign: "right" }}>
                       <div>{cluster.itemCount} items</div>
