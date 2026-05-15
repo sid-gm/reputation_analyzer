@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { cx, Dot, PlatformChip, Sparkline } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 type EnvStatus = { hackernews: boolean; reddit: boolean; twitter: boolean };
 
@@ -81,6 +82,7 @@ function fillSeries(
 }
 
 export default function SourcesPage() {
+  const { activeCompanyId } = useCompany();
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
   const [alertCount, setAlertCount] = useState(0);
   const [pollStatus, setPollStatus] = useState<Record<string, "idle" | "polling" | { inserted: number } | "error">>({});
@@ -93,8 +95,10 @@ export default function SourcesPage() {
   const [sourceSparklines, setSourceSparklines] = useState<Record<string, number[]>>({});
 
   useEffect(() => {
+    if (!activeCompanyId) return;
+
     fetch("/api/sources/status").then((r) => r.json()).then(setEnvStatus);
-    fetch("/api/entities")
+    fetch(`/api/entities?companyId=${activeCompanyId}`)
       .then((r) => r.json())
       .then((entities: { googleAlertsFeedUrl: string | null }[]) =>
         setAlertCount(entities.filter((e) => e.googleAlertsFeedUrl).length)
@@ -106,15 +110,16 @@ export default function SourcesPage() {
       );
 
     const refreshStats = () => {
-      fetch("/api/sources/stats/google-alerts").then((r) => r.json()).then(setGaStats);
-      fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
-      fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
-      fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
+      const cq = `companyId=${activeCompanyId}`;
+      fetch(`/api/sources/stats/google-alerts?${cq}`).then((r) => r.json()).then(setGaStats);
+      fetch(`/api/sources/stats/hackernews?${cq}`).then((r) => r.json()).then(setHnStats);
+      fetch(`/api/sources/stats/reddit?${cq}`).then((r) => r.json()).then(setRedditStats);
+      fetch(`/api/sources/stats/twitter?${cq}`).then((r) => r.json()).then(setTwitterStats);
 
       const platforms = ["hackernews", "reddit", "twitter", "google_alerts", "manual"];
       Promise.all(
         platforms.map((p) =>
-          fetch(`/api/items/timeseries?platform=${p}&groupBy=hour&days=1`)
+          fetch(`/api/items/timeseries?platform=${p}&groupBy=hour&days=1&${cq}`)
             .then((r) => r.json())
             .then((d) => [p, fillSeries(d.series, 24, 3600000)] as const)
         )
@@ -124,7 +129,7 @@ export default function SourcesPage() {
     refreshStats();
     const interval = setInterval(refreshStats, 60_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeCompanyId]);
 
   async function addSubreddit() {
     const name = subredditInput.trim().replace(/^r\//i, "");
@@ -169,9 +174,10 @@ export default function SourcesPage() {
       const res = await fetch(endpoint, { method: "POST" });
       const data = await res.json();
       setPollStatus((s) => ({ ...s, [key]: { inserted: data.inserted ?? 0 } }));
-      if (key === "hackernews") fetch("/api/sources/stats/hackernews").then((r) => r.json()).then(setHnStats);
-      if (key === "reddit") fetch("/api/sources/stats/reddit").then((r) => r.json()).then(setRedditStats);
-      if (key === "twitter") fetch("/api/sources/stats/twitter").then((r) => r.json()).then(setTwitterStats);
+      const cq = activeCompanyId ? `?companyId=${activeCompanyId}` : "";
+      if (key === "hackernews") fetch(`/api/sources/stats/hackernews${cq}`).then((r) => r.json()).then(setHnStats);
+      if (key === "reddit") fetch(`/api/sources/stats/reddit${cq}`).then((r) => r.json()).then(setRedditStats);
+      if (key === "twitter") fetch(`/api/sources/stats/twitter${cq}`).then((r) => r.json()).then(setTwitterStats);
     } catch {
       setPollStatus((s) => ({ ...s, [key]: "error" }));
     }

@@ -126,10 +126,11 @@ export default function FeedPage() {
   }, [activeCompanyId]);
 
   useEffect(() => {
-    fetch("/api/items/timeseries?days=30")
+    if (!activeCompanyId) return;
+    fetch(`/api/items/timeseries?days=30&companyId=${activeCompanyId}`)
       .then((r) => r.json())
       .then((d) => setTotalSpark(fillSeries(d.series, 30, 86400000)));
-  }, []);
+  }, [activeCompanyId]);
 
   useEffect(() => { fetchItems(); setPage(1); }, [fetchItems]);
   useEffect(() => { fetchCounts(); }, [fetchCounts]);
