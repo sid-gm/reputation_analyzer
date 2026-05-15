@@ -45,6 +45,10 @@ type Cluster = {
   analystClassification: string | null;
   analystNote: string | null;
   narrativeSummary: string | null;
+  narrativeStage: string | null;
+  velocity24h: number | null;
+  prevVelocity24h: number | null;
+  peakMomentum: number | null;
   topItems: ClusterItem[];
   platforms: string[];
   trackedEntities: Array<{ id: string; label: string }>;
@@ -74,6 +78,91 @@ function relativeTime(iso: string | null) {
 function shortDate(iso: string | null) {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const STAGE_RULES: Array<{ stage: string; color: string; conditions: Array<{ label: string; check: (v: number, p: number, a: number, age: number) => boolean }> }> = [
+  { stage: "emerging",   color: "var(--ok)",     conditions: [{ label: "age < 2d", check: (_v,_p,_a,age) => age < 2 }, { label: "v > 0", check: (v) => v > 0 }] },
+  { stage: "developing", color: "var(--accent)",  conditions: [{ label: "accel > 0", check: (_v,_p,a) => a > 0 }, { label: "ratio < 85%", check: (v,p) => p > 0 && v/p < 0.85 }] },
+  { stage: "peaked",     color: "var(--warn)",    conditions: [{ label: "ratio ≥ 85%", check: (v,p) => p > 0 && v/p >= 0.85 }, { label: "accel ≤ 0", check: (_v,_p,a) => a <= 0 }] },
+  { stage: "declining",  color: "var(--err)",     conditions: [{ label: "ratio < 50%", check: (v,p) => p > 0 && v/p < 0.5 }, { label: "accel ≤ 0", check: (_v,_p,a) => a <= 0 }] },
+];
+
+function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum, firstSeenAt }: {
+  stage: string;
+  velocity24h?: number | null;
+  prevVelocity24h?: number | null;
+  peakMomentum?: number | null;
+  firstSeenAt?: string | null;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const styles: Record<string, { label: string; bg: string; color: string }> = {
+    emerging:   { label: "EMERGING",   bg: "color-mix(in oklch, var(--ok) 15%, transparent)",     color: "var(--ok)" },
+    developing: { label: "DEVELOPING", bg: "color-mix(in oklch, var(--accent) 15%, transparent)", color: "var(--accent)" },
+    peaked:     { label: "PEAKED",     bg: "color-mix(in oklch, var(--warn) 15%, transparent)",   color: "var(--warn)" },
+    declining:  { label: "DECLINING",  bg: "color-mix(in oklch, var(--err) 12%, transparent)",    color: "var(--err)" },
+  };
+  const s = styles[stage];
+  if (!s) return null;
+  const v = velocity24h ?? 0;
+  const pv = prevVelocity24h ?? 0;
+  const pk = peakMomentum ?? 0;
+  const accel = v - pv;
+  const ageInDays = firstSeenAt ? (Date.now() - new Date(firstSeenAt).getTime()) / 86400000 : 99;
+  const ratio = pk > 0 ? v / pk : null;
+  const fmt = (n: number | null | undefined) => n == null ? "—" : n.toFixed(1);
+  return (
+    <span
+      style={{ position: "relative", display: "inline-block" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em",
+        textTransform: "uppercase", color: s.color, background: s.bg,
+        borderRadius: 3, padding: "2px 6px", cursor: "default",
+      }}>
+        {s.label}
+      </span>
+      {hovered && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 9000,
+          background: "var(--ink)", color: "var(--paper)", borderRadius: 6,
+          padding: "10px 14px", fontSize: 11, fontFamily: "var(--font-mono)",
+          whiteSpace: "nowrap", pointerEvents: "none",
+          boxShadow: "0 6px 20px rgba(0,0,0,0.25)", minWidth: 260,
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 16px", marginBottom: 10 }}>
+            <span style={{ opacity: 0.45 }}>velocity</span><span>{fmt(velocity24h)}<span style={{ opacity: 0.5 }}>/day</span></span>
+            <span style={{ opacity: 0.45 }}>prev</span><span>{fmt(prevVelocity24h)}<span style={{ opacity: 0.5 }}>/day</span></span>
+            <span style={{ opacity: 0.45 }}>accel</span><span>{accel >= 0 ? "+" : ""}{fmt(accel)}<span style={{ opacity: 0.5 }}>/day</span></span>
+            <span style={{ opacity: 0.45 }}>peak</span><span>{fmt(peakMomentum)}<span style={{ opacity: 0.5 }}>/day</span></span>
+            <span style={{ opacity: 0.45 }}>ratio</span><span>{ratio != null ? `${Math.round(ratio * 100)}%` : "—"}</span>
+          </div>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+            {STAGE_RULES.map(({ stage: rs, color, conditions }) => {
+              const isActive = rs === stage;
+              return (
+                <div key={rs} style={{ display: "flex", alignItems: "center", gap: 8, opacity: isActive ? 1 : 0.35 }}>
+                  <span style={{ color, width: 8, fontSize: 8 }}>{isActive ? "●" : "○"}</span>
+                  <span style={{ color, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", minWidth: 82 }}>{rs}</span>
+                  <span style={{ display: "flex", gap: 8 }}>
+                    {conditions.map((c) => {
+                      const met = c.check(v, pk, accel, ageInDays);
+                      return (
+                        <span key={c.label} style={{ color: met ? "var(--ok)" : "rgba(255,255,255,0.4)" }}>
+                          {c.label}{isActive ? (met ? " ✓" : " ✗") : ""}
+                        </span>
+                      );
+                    })}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </span>
+  );
 }
 
 function WaveHeader({ label, isFirst }: { label: string; isFirst: boolean }) {
@@ -194,7 +283,7 @@ export default function NoisePage() {
                 <div key={cluster.id} className="cluster-card" style={{ padding: 16, opacity: 0.85 }}>
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ marginBottom: 6, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span style={{
                           fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, letterSpacing: "0.1em",
                           textTransform: "uppercase", color: "var(--ink-40)",
@@ -209,6 +298,9 @@ export default function NoisePage() {
                         }}>
                           ANALYST REVIEWED
                         </span>
+                        {cluster.narrativeStage && (
+                          <StagePill stage={cluster.narrativeStage} velocity24h={cluster.velocity24h} prevVelocity24h={cluster.prevVelocity24h} peakMomentum={cluster.peakMomentum} firstSeenAt={cluster.firstSeenAt} />
+                        )}
                       </div>
                       <div style={{ fontSize: 15, fontWeight: 600, color: "var(--ink-60)", lineHeight: 1.3 }}>
                         {cluster.label ?? <span style={{ color: "var(--ink-30)", fontWeight: 400, fontStyle: "italic" }}>Unnamed cluster</span>}
