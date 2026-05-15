@@ -17,6 +17,31 @@ export async function POST() {
       ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE
     `);
 
+    await db.execute(sql`
+      ALTER TABLE reddit_subreddits
+      ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE
+    `);
+
+    await db.execute(sql`
+      ALTER TABLE reddit_subreddits
+      DROP CONSTRAINT IF EXISTS reddit_subreddits_subreddit_name_unique
+    `);
+
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'reddit_subreddits_company_subreddit_unique'
+        ) THEN
+          ALTER TABLE reddit_subreddits
+          ADD CONSTRAINT reddit_subreddits_company_subreddit_unique
+          UNIQUE (company_id, subreddit_name);
+        END IF;
+      END
+      $$
+    `);
+
     return NextResponse.json({ ok: true, message: "Migration applied" });
   } catch (err) {
     console.error("[POST /api/migrate]", err);

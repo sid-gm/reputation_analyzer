@@ -103,7 +103,7 @@ export default function SourcesPage() {
       .then((entities: { googleAlertsFeedUrl: string | null }[]) =>
         setAlertCount(entities.filter((e) => e.googleAlertsFeedUrl).length)
       );
-    fetch("/api/subreddits")
+    fetch(`/api/subreddits?companyId=${activeCompanyId}`)
       .then((r) => r.json())
       .then((rows: { subredditName: string }[]) =>
         setSubreddits(rows.map((r) => r.subredditName))
@@ -133,11 +133,11 @@ export default function SourcesPage() {
 
   async function addSubreddit() {
     const name = subredditInput.trim().replace(/^r\//i, "");
-    if (!name) return;
+    if (!name || !activeCompanyId) return;
     const res = await fetch("/api/subreddits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subredditName: name }),
+      body: JSON.stringify({ subredditName: name, companyId: activeCompanyId }),
     });
     if (res.ok) {
       setSubreddits((prev) => (prev.includes(name) ? prev : [...prev, name]));
@@ -146,7 +146,8 @@ export default function SourcesPage() {
   }
 
   async function removeSubreddit(name: string) {
-    await fetch(`/api/subreddits/${name}`, { method: "DELETE" });
+    const cq = activeCompanyId ? `?companyId=${activeCompanyId}` : "";
+    await fetch(`/api/subreddits/${name}${cq}`, { method: "DELETE" });
     setSubreddits((prev) => prev.filter((s) => s !== name));
   }
 

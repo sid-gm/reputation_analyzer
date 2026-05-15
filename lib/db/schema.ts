@@ -178,9 +178,10 @@ export const clusterPeriodNarratives = pgTable(
 
 export const redditSubreddits = pgTable("reddit_subreddits", {
   id: uuid("id").defaultRandom().primaryKey(),
-  subredditName: text("subreddit_name").notNull().unique(),
+  companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+  subredditName: text("subreddit_name").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (t) => [unique("reddit_subreddits_company_subreddit_unique").on(t.companyId, t.subredditName)]);
 
 export type Company = typeof companies.$inferSelect;
 export type NewCompany = typeof companies.$inferInsert;
