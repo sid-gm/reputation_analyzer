@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { cx, PlatformChip, Sparkline, EntityBadge, Field } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 type Entity = {
   id: string;
@@ -26,6 +27,7 @@ function pseudoSpark(seed: number, base: number): number[] {
 }
 
 export default function TrackPage() {
+  const { activeCompanyId } = useCompany();
   const [entities, setEntities] = useState<Entity[]>([]);
   const [type, setType] = useState("all");
   const [query, setQuery] = useState("");
@@ -34,10 +36,12 @@ export default function TrackPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const load = () =>
-    fetch("/api/entities").then((r) => r.json()).then(setEntities);
+  const load = () => {
+    if (!activeCompanyId) return;
+    fetch(`/api/entities?companyId=${activeCompanyId}`).then((r) => r.json()).then(setEntities);
+  };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [activeCompanyId]);
 
   const counts = useMemo(() => {
     const c = { all: entities.length, keyword: 0, executive: 0, product: 0 };
@@ -64,7 +68,7 @@ export default function TrackPage() {
     const res = await fetch("/api/entities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, companyId: activeCompanyId }),
     });
     if (res.ok) {
       setForm(emptyForm);

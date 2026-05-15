@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { ingestedItems, trackedEntities } from "@/lib/db/schema";
-import { desc, eq, and, SQL } from "drizzle-orm";
+import { desc, eq, and, inArray, SQL } from "drizzle-orm";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const platform = searchParams.get("platform");
   const entityId = searchParams.get("entityId");
+  const companyId = searchParams.get("companyId");
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50"), 500);
   const offset = parseInt(searchParams.get("offset") ?? "0");
 
   const conditions: SQL[] = [];
   if (platform) conditions.push(eq(ingestedItems.platform, platform as never));
   if (entityId) conditions.push(eq(ingestedItems.entityId, entityId));
+  if (companyId) {
+    const entityIds = await db
+      .select({ id: trackedEntities.id })
+      .from(trackedEntities)
+      .where(eq(trackedEntities.companyId, companyId));
+    conditions.push(inArray(ingestedItems.entityId, entityIds.map((e) => e.id)));
+  }
 
   const items = await db
     .select({

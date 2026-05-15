@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { JetBrains_Mono } from "next/font/google";
 import { Sidebar } from "@/components/Sidebar";
+import { CompanyProvider } from "@/components/CompanyContext";
 import "./globals.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
@@ -30,10 +31,12 @@ export default function RootLayout({
         `}</style>
       </head>
       <body className={`${geist.variable} ${jetbrainsMono.variable}`}>
-        <div className="shell">
-          <Sidebar />
-          <div className="main">{children}</div>
-        </div>
+        <CompanyProvider>
+          <div className="shell">
+            <Sidebar />
+            <div className="main">{children}</div>
+          </div>
+        </CompanyProvider>
       </body>
     </html>
   );

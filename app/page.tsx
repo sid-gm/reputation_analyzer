@@ -5,6 +5,7 @@ import {
   cx, PLATFORMS, PlatformChip, SignalTag, SentimentBar,
   EntityBadge, Sparkline, Dot,
 } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 type FeedItem = {
   id: string;
@@ -40,6 +41,7 @@ function pseudoSpark(seed: number, len = 16): number[] {
 }
 
 export default function FeedPage() {
+  const { activeCompanyId } = useCompany();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [platform, setPlatform] = useState("all");
@@ -92,25 +94,27 @@ export default function FeedPage() {
   }, []);
 
   const fetchItems = useCallback(async () => {
+    if (!activeCompanyId) return;
     setLoading(true);
-    const params = new URLSearchParams({ limit: "500" });
+    const params = new URLSearchParams({ limit: "500", companyId: activeCompanyId });
     if (platform !== "all") params.set("platform", platform);
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/items?${params}`);
     setItems(await res.json());
     setLoading(false);
-  }, [platform, entityId]);
+  }, [platform, entityId, activeCompanyId]);
 
   const fetchCounts = useCallback(async () => {
-    const params = new URLSearchParams();
+    if (!activeCompanyId) return;
+    const params = new URLSearchParams({ companyId: activeCompanyId });
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/items/counts?${params}`);
     setPlatformCounts(await res.json());
-  }, [entityId]);
+  }, [entityId, activeCompanyId]);
 
   useEffect(() => {
-    fetch("/api/entities").then((r) => r.json()).then(setEntities);
-  }, []);
+    if (activeCompanyId) fetch(`/api/entities?companyId=${activeCompanyId}`).then((r) => r.json()).then(setEntities);
+  }, [activeCompanyId]);
 
   useEffect(() => { fetchItems(); setPage(1); }, [fetchItems]);
   useEffect(() => { fetchCounts(); }, [fetchCounts]);

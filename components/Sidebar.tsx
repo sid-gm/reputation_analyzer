@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRef, useState, useEffect } from "react";
 import { cx, Dot } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 const SOURCES_NAV = [
   { href: "/",        label: "Feed",    glyph: "≡" },
@@ -18,6 +20,64 @@ const SOON = [
 
 export function Sidebar() {
   const path = usePathname();
+  const { companies, activeCompany, setActiveCompanyId, createCompany, renameCompany } = useCompany();
+
+  const [showSwitcher, setShowSwitcher] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [renameSaving, setRenameSaving] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showSwitcher) return;
+    function handleClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowSwitcher(false);
+        setAdding(false);
+        setNewName("");
+        setEditingId(null);
+        setEditingName("");
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showSwitcher]);
+
+  const sinceYear = activeCompany
+    ? new Date(activeCompany.createdAt).getFullYear()
+    : "—";
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!name) return;
+    setSaving(true);
+    try {
+      await createCompany(name);
+      setNewName("");
+      setAdding(false);
+      setShowSwitcher(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRename(e: React.FormEvent, id: string) {
+    e.preventDefault();
+    const name = editingName.trim();
+    if (!name) return;
+    setRenameSaving(true);
+    try {
+      await renameCompany(id, name);
+      setEditingId(null);
+      setEditingName("");
+    } finally {
+      setRenameSaving(false);
+    }
+  }
 
   return (
     <aside className="sidebar">
@@ -31,13 +91,86 @@ export function Sidebar() {
         </div>
       </div>
 
-      <div className="company">
-        <div className="company-name">Your Company</div>
-        <div className="company-meta">
-          <span className="kbd">—</span>
-          <span>·</span>
-          <span>Since 2026</span>
-        </div>
+      <div className="company-wrap" ref={wrapperRef}>
+        <button
+          className={cx("company company-btn", showSwitcher && "company-btn-open")}
+          onClick={() => { setShowSwitcher((v) => !v); setAdding(false); setNewName(""); }}
+          title="Switch company"
+        >
+          <div className="company-name">{activeCompany?.name ?? "—"}</div>
+          <div className="company-meta">
+            <span className="kbd">—</span>
+            <span>·</span>
+            <span>Since {sinceYear}</span>
+            <span className="company-caret">{showSwitcher ? "▲" : "▼"}</span>
+          </div>
+        </button>
+
+        {showSwitcher && (
+          <div className="company-switcher">
+            {companies.map((c) => (
+              editingId === c.id ? (
+                <form key={c.id} className="company-switcher-new" onSubmit={(e) => handleRename(e, c.id)}>
+                  <input
+                    autoFocus
+                    className="company-switcher-input"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    disabled={renameSaving}
+                  />
+                  <button type="submit" className="company-switcher-save" disabled={renameSaving || !editingName.trim()}>
+                    {renameSaving ? "…" : "Save"}
+                  </button>
+                  <button type="button" className="company-switcher-cancel" onClick={() => { setEditingId(null); setEditingName(""); }}>
+                    ✕
+                  </button>
+                </form>
+              ) : (
+                <div key={c.id} className={cx("company-switcher-item", c.id === activeCompany?.id && "company-switcher-item-active")}>
+                  <button
+                    className="company-switcher-select"
+                    onClick={() => { setActiveCompanyId(c.id); setShowSwitcher(false); }}
+                  >
+                    <span className="company-switcher-check">{c.id === activeCompany?.id ? "✓" : ""}</span>
+                    <span>{c.name}</span>
+                  </button>
+                  <button
+                    className="company-switcher-edit"
+                    title="Rename"
+                    onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditingName(c.name); setAdding(false); }}
+                  >
+                    ✎
+                  </button>
+                </div>
+              )
+            ))}
+
+            <div className="company-switcher-divider" />
+
+            {adding ? (
+              <form className="company-switcher-new" onSubmit={handleCreate}>
+                <input
+                  autoFocus
+                  className="company-switcher-input"
+                  placeholder="Company name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  disabled={saving}
+                />
+                <button type="submit" className="company-switcher-save" disabled={saving || !newName.trim()}>
+                  {saving ? "…" : "Add"}
+                </button>
+                <button type="button" className="company-switcher-cancel" onClick={() => { setAdding(false); setNewName(""); }}>
+                  ✕
+                </button>
+              </form>
+            ) : (
+              <button className="company-switcher-add" onClick={() => setAdding(true)}>
+                + New company
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <nav className="nav">

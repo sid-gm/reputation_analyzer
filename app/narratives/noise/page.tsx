@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { PlatformChip } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 type ClusterItem = {
   clusterId: string;
@@ -88,6 +89,7 @@ function WaveHeader({ label, isFirst }: { label: string; isFirst: boolean }) {
 }
 
 export default function NoisePage() {
+  const { activeCompanyId } = useCompany();
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -97,12 +99,14 @@ export default function NoisePage() {
   const [savingPeriod, setSavingPeriod] = useState(false);
 
   const fetchClusters = useCallback(async () => {
+    if (!activeCompanyId) return;
     setLoading(true);
-    const res = await fetch("/api/clusters?analystClassification=noise&sort=activity");
+    const params = new URLSearchParams({ analystClassification: "noise", sort: "activity", companyId: activeCompanyId });
+    const res = await fetch(`/api/clusters?${params}`);
     const data = await res.json();
     setClusters(data.clusters ?? []);
     setLoading(false);
-  }, []);
+  }, [activeCompanyId]);
 
   useEffect(() => { fetchClusters(); }, [fetchClusters]);
 

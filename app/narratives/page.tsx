@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { cx, PlatformChip, Dot } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 type MergeInfo = {
   absorbedLabel: string | null;
@@ -285,6 +286,7 @@ function ItemSignalOverride({
 }
 
 export default function NarrativesPage() {
+  const { activeCompanyId } = useCompany();
   const [narratives, setNarratives] = useState<Narrative[]>([]);
   const [entities, setEntities] = useState<Entity[]>([]);
   const [entityId, setEntityId] = useState("all");
@@ -304,23 +306,25 @@ export default function NarrativesPage() {
   const [savingLabel, setSavingLabel] = useState(false);
 
   const fetchNarratives = useCallback(async () => {
+    if (!activeCompanyId) return;
     setLoading(true);
     const params = new URLSearchParams({
       classification: "narrative",
       sort: "momentum",
       hideSingletons: "true",
       stage: stageFilter,
+      companyId: activeCompanyId,
     });
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/clusters?${params}`);
     const data = await res.json();
     setNarratives(data.clusters ?? []);
     setLoading(false);
-  }, [entityId, stageFilter]);
+  }, [entityId, stageFilter, activeCompanyId]);
 
   useEffect(() => {
-    fetch("/api/entities").then((r) => r.json()).then(setEntities);
-  }, []);
+    if (activeCompanyId) fetch(`/api/entities?companyId=${activeCompanyId}`).then((r) => r.json()).then(setEntities);
+  }, [activeCompanyId]);
 
   useEffect(() => { fetchNarratives(); }, [fetchNarratives]);
 

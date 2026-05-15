@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { cx, PlatformChip, Dot } from "@/components/primitives";
+import { useCompany } from "@/components/CompanyContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -339,6 +340,7 @@ function MergeModal({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ClustersPage() {
+  const { activeCompanyId } = useCompany();
   const [clusterList, setClusterList] = useState<Cluster[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [entities, setEntities] = useState<Entity[]>([]);
@@ -374,17 +376,20 @@ export default function ClustersPage() {
   const gridRef = useRef<HTMLDivElement>(null);
 
   const fetchClusters = useCallback(async () => {
+    if (!activeCompanyId) return;
     setLoading(true);
-    const params = new URLSearchParams({ sort, hideSingletons: String(hideSingletons), classification: classificationFilter });
+    const params = new URLSearchParams({ sort, hideSingletons: String(hideSingletons), classification: classificationFilter, companyId: activeCompanyId });
     if (entityId !== "all") params.set("entityId", entityId);
     const res = await fetch(`/api/clusters?${params}`);
     const data = await res.json();
     setClusterList(data.clusters ?? []);
     setStats(data.stats ?? null);
     setLoading(false);
-  }, [entityId, sort, hideSingletons, classificationFilter]);
+  }, [entityId, sort, hideSingletons, classificationFilter, activeCompanyId]);
 
-  useEffect(() => { fetch("/api/entities").then((r) => r.json()).then(setEntities); }, []);
+  useEffect(() => {
+    if (activeCompanyId) fetch(`/api/entities?companyId=${activeCompanyId}`).then((r) => r.json()).then(setEntities);
+  }, [activeCompanyId]);
   useEffect(() => { fetchClusters(); }, [fetchClusters]);
 
   // ── Lasso: global mousemove/mouseup listeners while dragging ────────────────

@@ -13,6 +13,19 @@ export async function GET(req: Request) {
 
   const baseConditions = [isNull(clusters.archivedAt)];
   if (entityId) baseConditions.push(eq(clusters.entityId, entityId));
+
+  const companyId = searchParams.get("companyId") ?? undefined;
+  if (companyId) {
+    const entityIds = await db
+      .select({ id: trackedEntities.id })
+      .from(trackedEntities)
+      .where(eq(trackedEntities.companyId, companyId));
+    if (entityIds.length > 0) {
+      baseConditions.push(inArray(clusters.entityId, entityIds.map((e) => e.id)));
+    } else {
+      return NextResponse.json([]);
+    }
+  }
   if (hideSingletons) baseConditions.push(gte(clusters.itemCount, 2));
 
   // Analyst classification filter (explicit reviewer decisions)

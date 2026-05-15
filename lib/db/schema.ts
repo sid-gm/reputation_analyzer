@@ -63,12 +63,18 @@ export const platformEnum = pgEnum("platform", [
   "manual",
 ]);
 
+export const companies = pgTable("companies", {
+  id:        uuid("id").defaultRandom().primaryKey(),
+  name:      text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const trackedEntities = pgTable("tracked_entities", {
   id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
   label: text("label").notNull(),
   queryString: text("query_string").notNull(),
   entityType: entityTypeEnum("entity_type").notNull(),
-  // For Google Alerts: store the RSS feed URL here
   googleAlertsFeedUrl: text("google_alerts_feed_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -176,6 +182,8 @@ export const redditSubreddits = pgTable("reddit_subreddits", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export type Company = typeof companies.$inferSelect;
+export type NewCompany = typeof companies.$inferInsert;
 export type TrackedEntity = typeof trackedEntities.$inferSelect;
 export type NewTrackedEntity = typeof trackedEntities.$inferInsert;
 export type IngestedItem = typeof ingestedItems.$inferSelect;
