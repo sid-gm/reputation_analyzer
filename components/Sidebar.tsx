@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { cx, Dot } from "@/components/primitives";
 import { useCompany } from "@/components/CompanyContext";
 
@@ -20,7 +21,7 @@ const SOON = [
 
 export function Sidebar() {
   const path = usePathname();
-  const { companies, activeCompany, setActiveCompanyId, createCompany, renameCompany } = useCompany();
+  const { companies, activeCompany, setActiveCompanyId, createCompany, renameCompany, deleteCompany } = useCompany();
 
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -30,6 +31,28 @@ export function Sidebar() {
   const [editingName, setEditingName] = useState("");
   const [renameSaving, setRenameSaving] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<"idle" | "confirm">("idle");
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
+
+  function openSettings() { setShowSettings(true); setDeleteStep("idle"); setDeleteInput(""); }
+  function closeSettings() { setShowSettings(false); setDeleteStep("idle"); setDeleteInput(""); }
+
+  async function handleDeleteConfirm() {
+    if (!activeCompany || deleteInput !== activeCompany.name) return;
+    setDeleting(true);
+    try {
+      await deleteCompany(activeCompany.id);
+      closeSettings();
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (!showSwitcher) return;
@@ -244,7 +267,70 @@ export function Sidebar() {
           <span className="kbd">⌘K</span>
           <span>Quick command</span>
         </div>
+        <button className="sb-settings-btn" onClick={openSettings}>
+          ⚙ Settings
+        </button>
       </div>
+
+      {mounted && showSettings && createPortal(
+        <div className="modal-overlay" onClick={closeSettings}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <span className="modal-title">
+                {deleteStep === "confirm" ? "Delete project" : "Settings"}
+              </span>
+              <button className="modal-close" onClick={closeSettings}>✕</button>
+            </div>
+
+            {deleteStep === "idle" && (
+              <div className="modal-body">
+                <p className="modal-project-name">{activeCompany?.name}</p>
+                <div className="modal-divider" />
+                <button className="modal-danger-row" onClick={() => setDeleteStep("confirm")}>
+                  <span className="modal-danger-icon">⚠</span>
+                  <span>Delete this project</span>
+                </button>
+              </div>
+            )}
+
+            {deleteStep === "confirm" && (
+              <div className="modal-body">
+                <p className="modal-warn-text">
+                  This will permanently delete <strong>{activeCompany?.name}</strong> and all its data. This action cannot be undone.
+                </p>
+                <label className="modal-label">
+                  Type the project name to confirm
+                </label>
+                <input
+                  autoFocus
+                  className="modal-input"
+                  placeholder={activeCompany?.name}
+                  value={deleteInput}
+                  onChange={(e) => setDeleteInput(e.target.value)}
+                  disabled={deleting}
+                />
+                <div className="modal-actions">
+                  <button
+                    className="modal-btn-cancel"
+                    onClick={() => { setDeleteStep("idle"); setDeleteInput(""); }}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="modal-btn-delete"
+                    onClick={handleDeleteConfirm}
+                    disabled={deleting || deleteInput !== activeCompany?.name}
+                  >
+                    {deleting ? "Deleting…" : "Delete project"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
     </aside>
   );
 }
