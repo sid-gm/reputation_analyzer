@@ -106,7 +106,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="brand">
         <div className="brand-mark">
-          <span className="brand-mark-inner">RA</span>
+          <span className="brand-mark-inner">GT</span>
         </div>
         <div className="brand-text">
           <div className="brand-title">Gito</div>
