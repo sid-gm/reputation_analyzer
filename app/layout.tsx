@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reputation Analyzer",
+  title: "Gito",
   description: "Signal-to-noise intelligence for social media analysts",
 };
 

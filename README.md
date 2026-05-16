@@ -1,4 +1,4 @@
-# Reputation Analyzer — Signal-to-Noise (STN) Tool
+# Gito — Signal-to-Noise (STN) Tool
 
 A tool for social media analysts to cut through the noise and surface what actually matters about a company's reputation online.
 
@@ -14,7 +14,7 @@ Today, that work happens in browser tabs, spreadsheets, and gut instinct. This t
 
 ## What It Does
 
-The Reputation Analyzer is a single-company intelligence tool. You configure what you care about — keywords, products, executives — and the tool listens across the internet, collects everything, and helps you separate signal from noise.
+Gito is a single-company intelligence tool. You configure what you care about — keywords, products, executives — and the tool listens across the internet, collects everything, and helps you separate signal from noise.
 
 It's built for **one analyst, one company**, with a complex profile: multiple products, multiple public-facing executives, and dozens of keywords that all need monitoring simultaneously.
 

@@ -109,7 +109,7 @@ export function Sidebar() {
           <span className="brand-mark-inner">RA</span>
         </div>
         <div className="brand-text">
-          <div className="brand-title">Reputation Analyzer</div>
+          <div className="brand-title">Gito</div>
           <div className="brand-sub">Signal-to-noise · v0.1</div>
         </div>
       </div>
