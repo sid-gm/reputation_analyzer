@@ -1,29 +1,33 @@
-export type NarrativeStage = "emerging" | "developing" | "peaked" | "declining";
+export type NarrativeStage = "emerging" | "relaxed" | "developing" | "peaked" | "declining";
+
+// Platforms considered "news" — excluded from non-news count
+export const NEWS_PLATFORMS = ["google_news", "google_alerts"];
 
 export function computeNarrativeStage(opts: {
-  velocity24h: number;      // items added in the last 24h
-  prevVelocity24h: number;  // items added in the 24-48h window
-  peakMomentum: number | null; // null = first classification run for this cluster
+  velocity24h: number;
+  prevVelocity24h: number;
+  peakMomentum: number | null;
   ageInDays: number;
+  platformCount?: number;
+  nonNewsPlatformCount?: number;
 }): NarrativeStage {
-  const { velocity24h, prevVelocity24h, peakMomentum, ageInDays } = opts;
+  const { velocity24h, prevVelocity24h, peakMomentum, ageInDays,
+          platformCount = 0, nonNewsPlatformCount = 0 } = opts;
   const acceleration = velocity24h - prevVelocity24h;
 
-  // Very new cluster still receiving intake
-  if (ageInDays < 2 && velocity24h > 0) return "emerging";
-
-  // First-ever run: no historical peak to compare against
-  if (peakMomentum == null) {
-    if (velocity24h === 0) return ageInDays > 3 ? "declining" : "peaked";
-    if (acceleration > 0) return "developing";
-    return "developing";
+  if (ageInDays < 1) {
+    if (nonNewsPlatformCount >= 3 || platformCount >= 5) return "emerging";
+    return "relaxed";
   }
 
-  const peakRatio = peakMomentum > 0 ? velocity24h / peakMomentum : 0;
+  if (velocity24h > 0) return "developing";
 
-  if (acceleration > 0 && peakRatio < 0.85) return "developing";
-  if (peakRatio >= 0.85 && acceleration <= 0) return "peaked";
-  if (peakRatio < 0.5 && acceleration <= 0) return "declining";
+  if (peakMomentum != null && peakMomentum > 0) {
+    const peakRatio = velocity24h / peakMomentum;
+    if (peakRatio >= 0.85 && acceleration <= 0) return "peaked";
+    if (peakRatio < 0.5 && acceleration <= 0) return "declining";
+  }
+
   if (velocity24h === 0 && ageInDays > 3) return "declining";
 
   return "developing";

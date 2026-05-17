@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, avg, count, desc, eq, gte, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, avg, count, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clusters, clusterItems, ingestedItems, trackedEntities } from "@/lib/db/schema";
 
@@ -72,11 +72,22 @@ export async function GET(req: Request) {
     );
   }
 
-  const orderBy =
-    sort === "size"    ? desc(clusters.itemCount) :
-    sort === "created" ? desc(clusters.createdAt) :
+  const stagePriority = sql<number>`CASE ${clusters.narrativeStage}
+    WHEN 'emerging'   THEN 1
+    WHEN 'developing' THEN 2
+    WHEN 'relaxed'    THEN 3
+    WHEN 'peaked'     THEN 4
+    WHEN 'declining'  THEN 5
+    ELSE 6
+  END`;
+
+  const secondarySort =
+    sort === "size"     ? desc(clusters.itemCount) :
+    sort === "created"  ? desc(clusters.createdAt) :
     sort === "momentum" ? desc(clusters.momentum) :
-                         desc(clusters.lastSeenAt);
+                          desc(clusters.lastSeenAt);
+
+  const orderBy = [asc(stagePriority), secondarySort];
 
   const allClusters = await db
     .select({
@@ -94,12 +105,13 @@ export async function GET(req: Request) {
       peakMomentum: clusters.peakMomentum,
       velocity24h: clusters.velocity24h,
       prevVelocity24h: clusters.prevVelocity24h,
+      platformCount: clusters.platformCount,
       analystClassification: clusters.analystClassification,
       analystNote: clusters.analystNote,
     })
     .from(clusters)
     .where(and(...baseConditions))
-    .orderBy(orderBy);
+    .orderBy(...orderBy);
 
   const filtered = allClusters;
 

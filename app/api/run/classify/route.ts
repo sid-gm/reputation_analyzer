@@ -3,7 +3,7 @@ import { and, count, eq, gt, gte, isNull, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { clusters, clusterItems, ingestedItems, trackedEntities } from "@/lib/db/schema";
 import { classifyCluster, classifyItemSignals } from "@/lib/ai/classify";
-import { computeNarrativeStage } from "@/lib/narrative-stage";
+import { computeNarrativeStage, NEWS_PLATFORMS } from "@/lib/narrative-stage";
 
 const BATCH_SIZE = 10;
 
@@ -65,7 +65,8 @@ export async function POST() {
         .where(eq(clusterItems.clusterId, cluster.id))
         .limit(5);
 
-      const platforms = [...new Set(items.map((i) => i.platform))];
+      const platforms = [...new Set(items.map((i) => i.platform).filter(Boolean))];
+      const nonNewsPlatformCount = platforms.filter((p) => !NEWS_PLATFORMS.includes(p)).length;
       const titles = items.map((i) => i.title ?? i.body?.slice(0, 120) ?? "").filter(Boolean);
       if (titles.length === 0) continue;
 
@@ -102,26 +103,26 @@ export async function POST() {
         platformCount: platforms.length,
       });
 
-      const narrativeStage =
-        result.classification === "narrative"
-          ? computeNarrativeStage({
-              velocity24h,
-              prevVelocity24h,
-              peakMomentum: cluster.peakMomentum,
-              ageInDays,
-            })
-          : null;
+      const narrativeStage = computeNarrativeStage({
+        velocity24h,
+        prevVelocity24h,
+        peakMomentum: cluster.peakMomentum,
+        ageInDays,
+        platformCount: platforms.length,
+        nonNewsPlatformCount,
+      });
 
       await db
         .update(clusters)
         .set({
           classification: result.classification,
-          narrativeStage: narrativeStage ?? undefined,
+          narrativeStage,
           narrativeSummary: result.narrativeSummary,
           momentum,
           peakMomentum: newPeakMomentum,
           velocity24h,
           prevVelocity24h,
+          platformCount: platforms.length,
           classifiedAt: now,
         })
         .where(eq(clusters.id, cluster.id));

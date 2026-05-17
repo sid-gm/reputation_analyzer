@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { and, eq, isNull, isNotNull } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNull, isNotNull, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { ingestedItems, clusters, clusterItems } from "@/lib/db/schema";
 import { verifyCronSecret } from "@/lib/cron-auth";
+import { computeNarrativeStage, NEWS_PLATFORMS } from "@/lib/narrative-stage";
 
 const SIMILARITY_THRESHOLD = 0.80;
 const BATCH_SIZE = 100;
@@ -26,7 +27,6 @@ export async function GET(req: Request) {
   const authError = verifyCronSecret(req);
   if (authError) return authError;
 
-  // Items with embeddings not yet in cluster_items
   const unassigned = await db
     .select({
       id: ingestedItems.id,
@@ -48,7 +48,6 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, assigned: 0, created: 0 });
   }
 
-  // Group by entity
   const byEntity = new Map<string, typeof unassigned>();
   for (const item of unassigned) {
     if (!item.entityId) continue;
@@ -58,9 +57,9 @@ export async function GET(req: Request) {
 
   let assigned = 0;
   let created = 0;
+  const updatedClusterIds = new Set<string>();
 
   for (const [entityId, items] of byEntity) {
-    // Load active clusters for this entity (in-memory for JS similarity)
     const activeClusters = await db
       .select()
       .from(clusters)
@@ -95,6 +94,7 @@ export async function GET(req: Request) {
 
           cluster.centroidEmbedding = newCentroid;
           cluster.itemCount = newCount;
+          if (newCount >= 2) updatedClusterIds.add(bestClusterId);
           assigned++;
         } else {
           const now = item.publishedAt ?? new Date();
@@ -114,5 +114,66 @@ export async function GET(req: Request) {
     }
   }
 
+  // Compute velocity + stage from T0 for all updated non-singleton clusters
+  if (updatedClusterIds.size > 0) {
+    await updateVelocityAndStage([...updatedClusterIds]);
+  }
+
   return NextResponse.json({ ok: true, assigned, created });
+}
+
+async function updateVelocityAndStage(clusterIds: string[]) {
+  const now = new Date();
+  const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const h48ago = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const clusterRows = await db
+    .select({ id: clusters.id, firstSeenAt: clusters.firstSeenAt, peakMomentum: clusters.peakMomentum })
+    .from(clusters)
+    .where(inArray(clusters.id, clusterIds));
+
+  for (const cluster of clusterRows) {
+    try {
+      const [v24] = await db
+        .select({ cnt: count(clusterItems.itemId) })
+        .from(clusterItems)
+        .where(and(eq(clusterItems.clusterId, cluster.id), gt(clusterItems.addedAt, h24ago)));
+      const velocity24h = v24?.cnt ?? 0;
+
+      const [vPrev] = await db
+        .select({ cnt: count(clusterItems.itemId) })
+        .from(clusterItems)
+        .where(and(eq(clusterItems.clusterId, cluster.id), gt(clusterItems.addedAt, h48ago), lte(clusterItems.addedAt, h24ago)));
+      const prevVelocity24h = vPrev?.cnt ?? 0;
+
+      const platformRows = await db
+        .select({ platform: sql<string>`DISTINCT ${ingestedItems.platform}` })
+        .from(clusterItems)
+        .innerJoin(ingestedItems, eq(clusterItems.itemId, ingestedItems.id))
+        .where(eq(clusterItems.clusterId, cluster.id));
+
+      const platforms = [...new Set(platformRows.map((r) => r.platform).filter(Boolean))];
+      const nonNewsPlatformCount = platforms.filter((p) => !NEWS_PLATFORMS.includes(p)).length;
+
+      const ageInDays = (now.getTime() - new Date(cluster.firstSeenAt).getTime()) / (1000 * 60 * 60 * 24);
+      const momentum = (velocity24h + prevVelocity24h) / 2;
+      const newPeakMomentum = Math.max(cluster.peakMomentum ?? 0, velocity24h);
+
+      const narrativeStage = computeNarrativeStage({
+        velocity24h,
+        prevVelocity24h,
+        peakMomentum: cluster.peakMomentum,
+        ageInDays,
+        platformCount: platforms.length,
+        nonNewsPlatformCount,
+      });
+
+      await db
+        .update(clusters)
+        .set({ velocity24h, prevVelocity24h, momentum, peakMomentum: newPeakMomentum, platformCount: platforms.length, narrativeStage })
+        .where(eq(clusters.id, cluster.id));
+    } catch (err) {
+      console.error(`[cluster/velocity] cluster ${cluster.id}:`, err);
+    }
+  }
 }

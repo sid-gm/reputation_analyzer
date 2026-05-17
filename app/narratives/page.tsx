@@ -51,6 +51,7 @@ type Narrative = {
   peakMomentum: number | null;
   velocity24h: number | null;
   prevVelocity24h: number | null;
+  platformCount: number | null;
   analystClassification: string | null;
   analystNote: string | null;
   effectiveClassification: string;
@@ -88,8 +89,9 @@ function shortDate(iso: string | null) {
 }
 
 const STAGE_RULES: Array<{ stage: string; color: string; conditions: Array<{ label: string; check: (v: number, p: number, a: number, age: number) => boolean }> }> = [
-  { stage: "emerging",   color: "var(--ok)",     conditions: [{ label: "age < 2d", check: (_v,_p,_a,age) => age < 2 }, { label: "v > 0", check: (v) => v > 0 }] },
-  { stage: "developing", color: "var(--accent)",  conditions: [{ label: "accel > 0", check: (_v,_p,a) => a > 0 }, { label: "ratio < 85%", check: (v,p) => p > 0 && v/p < 0.85 }] },
+  { stage: "emerging",   color: "var(--ok)",     conditions: [{ label: "age < 24h", check: (_v,_p,_a,age) => age < 1 }, { label: "3+ non-news OR 5+ platforms", check: () => true }] },
+  { stage: "relaxed",    color: "#2563EB",        conditions: [{ label: "age < 24h", check: (_v,_p,_a,age) => age < 1 }, { label: "sub-threshold", check: () => true }] },
+  { stage: "developing", color: "var(--accent)",  conditions: [{ label: "age ≥ 24h", check: (_v,_p,_a,age) => age >= 1 }, { label: "v > 0", check: (v) => v > 0 }] },
   { stage: "peaked",     color: "var(--warn)",    conditions: [{ label: "ratio ≥ 85%", check: (v,p) => p > 0 && v/p >= 0.85 }, { label: "accel ≤ 0", check: (_v,_p,a) => a <= 0 }] },
   { stage: "declining",  color: "var(--err)",     conditions: [{ label: "ratio < 50%", check: (v,p) => p > 0 && v/p < 0.5 }, { label: "accel ≤ 0", check: (_v,_p,a) => a <= 0 }] },
 ];
@@ -128,16 +130,18 @@ function StageKey() {
   );
 }
 
-function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum, firstSeenAt }: {
+function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum, firstSeenAt, platformCount }: {
   stage: string;
   velocity24h?: number | null;
   prevVelocity24h?: number | null;
   peakMomentum?: number | null;
   firstSeenAt?: string | null;
+  platformCount?: number | null;
 }) {
   const [hovered, setHovered] = useState(false);
   const styles: Record<string, { label: string; bg: string; color: string }> = {
     emerging:   { label: "EMERGING",   bg: "color-mix(in oklch, var(--ok) 15%, transparent)",     color: "var(--ok)" },
+    relaxed:    { label: "RELAXED",    bg: "#2563EB",                                              color: "#FFFFFF" },
     developing: { label: "DEVELOPING", bg: "color-mix(in oklch, var(--accent) 15%, transparent)", color: "var(--accent)" },
     peaked:     { label: "PEAKED",     bg: "color-mix(in oklch, var(--warn) 15%, transparent)",   color: "var(--warn)" },
     declining:  { label: "DECLINING",  bg: "color-mix(in oklch, var(--err) 12%, transparent)",    color: "var(--err)" },
@@ -179,6 +183,7 @@ function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum, firstSee
             <span style={{ opacity: 0.45 }}>accel</span><span>{accel >= 0 ? "+" : ""}{fmt(accel)}<span style={{ opacity: 0.5 }}>/day</span></span>
             <span style={{ opacity: 0.45 }}>peak</span><span>{fmt(peakMomentum)}<span style={{ opacity: 0.5 }}>/day</span></span>
             <span style={{ opacity: 0.45 }}>ratio</span><span>{ratio != null ? `${Math.round(ratio * 100)}%` : "—"}</span>
+            <span style={{ opacity: 0.45 }}>platforms</span><span>{platformCount ?? "—"}</span>
           </div>
           {/* Rule conditions */}
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -579,7 +584,7 @@ export default function NarrativesPage() {
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-                        {n.narrativeStage && <StagePill stage={n.narrativeStage} velocity24h={n.velocity24h} prevVelocity24h={n.prevVelocity24h} peakMomentum={n.peakMomentum} firstSeenAt={n.firstSeenAt} />}
+                        {n.itemCount >= 2 && n.narrativeStage && <StagePill stage={n.narrativeStage} velocity24h={n.velocity24h} prevVelocity24h={n.prevVelocity24h} peakMomentum={n.peakMomentum} firstSeenAt={n.firstSeenAt} platformCount={n.platformCount} />}
                         {n.momentum != null && n.momentum > 0 && (
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--accent)" }}>
                             ↑{n.momentum.toFixed(1)}/day

@@ -43,6 +43,7 @@ export const clusterClassificationEnum = pgEnum("cluster_classification", [
 
 export const narrativeStageEnum = pgEnum("narrative_stage", [
   "emerging",
+  "relaxed",
   "developing",
   "peaked",
   "declining",
@@ -119,6 +120,7 @@ export const clusters = pgTable("clusters", {
   peakMomentum: real("peak_momentum"),
   velocity24h: real("velocity_24h"),
   prevVelocity24h: real("prev_velocity_24h"),
+  platformCount: integer("platform_count"),
   classificationConfidence: real("classification_confidence"),
   analystClassification: text("analyst_classification"), // 'narrative' | 'noise'
   analystNote: text("analyst_note"),
