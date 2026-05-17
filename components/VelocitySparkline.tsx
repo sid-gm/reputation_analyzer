@@ -11,38 +11,65 @@ const STAGE_COLORS: Record<string, string> = {
   relaxed:    "var(--ink-40)",
 };
 
-function fillHourlySeries(
-  sparse: { hour: string; count: number }[],
-  hours: number
+type RangeConfig = {
+  label: string;
+  groupBy: "hour" | "day";
+  slots: number;  // number of buckets to fill
+  param: string;  // query param string, e.g. "hours=24" or "days=7"
+  stepMs: number; // ms per bucket
+  keyFmt: (t: Date) => string;
+};
+
+function pickRange(firstSeenAt: string): RangeConfig {
+  const ageDays = (Date.now() - new Date(firstSeenAt).getTime()) / 86400000;
+
+  const hourKey = (t: Date) => {
+    const d = new Date(t);
+    d.setMinutes(0, 0, 0);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:00`;
+  };
+  const dayKey = (t: Date) =>
+    `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
+
+  if (ageDays < 1)  return { label: "24H", groupBy: "hour", slots: 24,  param: "hours=24",  stepMs: 3600000,  keyFmt: hourKey };
+  if (ageDays < 3)  return { label: "3D",  groupBy: "hour", slots: 72,  param: "hours=72",  stepMs: 3600000,  keyFmt: hourKey };
+  if (ageDays < 7)  return { label: "7D",  groupBy: "day",  slots: 7,   param: "days=7",    stepMs: 86400000, keyFmt: dayKey  };
+  if (ageDays < 14) return { label: "14D", groupBy: "day",  slots: 14,  param: "days=14",   stepMs: 86400000, keyFmt: dayKey  };
+  return               { label: "30D", groupBy: "day",  slots: 30,  param: "days=30",   stepMs: 86400000, keyFmt: dayKey  };
+}
+
+function fillSeries(
+  sparse: { bucket: string; count: number }[],
+  range: RangeConfig
 ): number[] {
-  const map = new Map(sparse.map((r) => [r.hour, r.count]));
+  const map = new Map(sparse.map((r) => [r.bucket, r.count]));
   const now = Date.now();
-  return Array.from({ length: hours }, (_, i) => {
-    const t = new Date(now - (hours - 1 - i) * 3600000);
-    // Floor to hour
-    t.setMinutes(0, 0, 0);
-    const key = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")} ${String(t.getHours()).padStart(2, "0")}:00`;
-    return map.get(key) ?? 0;
+  return Array.from({ length: range.slots }, (_, i) => {
+    const t = new Date(now - (range.slots - 1 - i) * range.stepMs);
+    return map.get(range.keyFmt(t)) ?? 0;
   });
 }
 
 export function VelocitySparkline({
   clusterId,
   stage,
-  hours = 24,
+  firstSeenAt,
 }: {
   clusterId: string;
   stage: string | null;
-  hours?: number;
+  firstSeenAt: string;
 }) {
   const [series, setSeries] = useState<number[] | null>(null);
+  const [label, setLabel] = useState("24H");
 
   useEffect(() => {
-    fetch(`/api/clusters/${clusterId}/velocity-history?hours=${hours}`)
+    const range = pickRange(firstSeenAt);
+    setLabel(range.label);
+    fetch(`/api/clusters/${clusterId}/velocity-history?groupBy=${range.groupBy}&${range.param}`)
       .then((r) => r.json())
-      .then((d) => setSeries(fillHourlySeries(d.series ?? [], hours)))
+      .then((d) => setSeries(fillSeries(d.series ?? [], range)))
       .catch(() => setSeries(null));
-  }, [clusterId, hours]);
+  }, [clusterId, firstSeenAt]);
 
   if (series === null) {
     return <div style={{ width: 120, height: 26, opacity: 0 }} />;
@@ -64,7 +91,7 @@ export function VelocitySparkline({
         letterSpacing: "0.06em",
         textTransform: "uppercase",
       }}>
-        {hours}H
+        {label}
       </span>
     </div>
   );

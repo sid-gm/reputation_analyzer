@@ -8,17 +8,28 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const hours = Math.min(
-    Math.max(parseInt(req.nextUrl.searchParams.get("hours") ?? "24", 10), 1),
-    168
-  );
+  const sp = req.nextUrl.searchParams;
+  const groupBy = sp.get("groupBy") === "day" ? "day" : "hour";
 
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
-  const trunc = sql`DATE_TRUNC('hour', ${clusterItems.addedAt})`;
+  let since: Date;
+  let trunc: ReturnType<typeof sql>;
+  let fmt: string;
+
+  if (groupBy === "day") {
+    const days = Math.min(Math.max(parseInt(sp.get("days") ?? "7", 10), 1), 90);
+    since = new Date(Date.now() - days * 86400000);
+    trunc = sql`DATE_TRUNC('day', ${clusterItems.addedAt})`;
+    fmt = "YYYY-MM-DD";
+  } else {
+    const hours = Math.min(Math.max(parseInt(sp.get("hours") ?? "24", 10), 1), 168);
+    since = new Date(Date.now() - hours * 3600000);
+    trunc = sql`DATE_TRUNC('hour', ${clusterItems.addedAt})`;
+    fmt = "YYYY-MM-DD HH24:00";
+  }
 
   const rows = await db
     .select({
-      hour: sql<string>`TO_CHAR(${trunc}, 'YYYY-MM-DD HH24:00')`,
+      bucket: sql<string>`TO_CHAR(${trunc}, ${fmt})`,
       count: count(),
     })
     .from(clusterItems)

@@ -627,7 +627,7 @@ export default function NarrativesPage() {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                       {n.narrativeStage && n.itemCount >= 2 && (
-                        <VelocitySparkline clusterId={n.id} stage={n.narrativeStage} />
+                        <VelocitySparkline clusterId={n.id} stage={n.narrativeStage} firstSeenAt={n.firstSeenAt} />
                       )}
                       <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-30)", textAlign: "right" }}>
                         {n.itemCount} items

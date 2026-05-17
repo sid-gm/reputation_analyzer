@@ -831,7 +831,7 @@ export default function ClustersPage() {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
                       {cluster.narrativeStage && cluster.itemCount >= 2 && (
-                        <VelocitySparkline clusterId={cluster.id} stage={cluster.narrativeStage} />
+                        <VelocitySparkline clusterId={cluster.id} stage={cluster.narrativeStage} firstSeenAt={cluster.firstSeenAt} />
                       )}
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                         <span className="cluster-card-count">{cluster.itemCount} items</span>
