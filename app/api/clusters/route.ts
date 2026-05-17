@@ -134,6 +134,7 @@ export async function GET(req: Request) {
             title: ingestedItems.title,
             body: ingestedItems.body,
             url: ingestedItems.url,
+            externalId: ingestedItems.externalId,
             platform: ingestedItems.platform,
             publishedAt: ingestedItems.publishedAt,
             ingestedAt: ingestedItems.createdAt,

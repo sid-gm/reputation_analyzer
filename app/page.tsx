@@ -13,6 +13,7 @@ type FeedItem = {
   entityLabel: string | null;
   platform: string;
   url: string | null;
+  externalId: string | null;
   title: string | null;
   body: string | null;
   author: string | null;
@@ -350,6 +351,12 @@ function FeedList({ items, entities }: { items: FeedItem[]; entities: Entity[] }
   );
 }
 
+function hnHref(item: FeedItem): string | null {
+  if (item.platform === "hackernews" && item.externalId)
+    return `https://news.ycombinator.com/item?id=${item.externalId}`;
+  return item.url;
+}
+
 function FeedRow({ item, entities }: { item: FeedItem; entities: Entity[] }) {
   const ent = entities.find((e) => e.id === item.entityId);
   const sentiment = 0;
@@ -368,8 +375,8 @@ function FeedRow({ item, entities }: { item: FeedItem; entities: Entity[] }) {
       <div className="feedrow-body">
         <div className="feedrow-head">
           <h3 className="feedrow-title">
-            {item.url ? (
-              <a href={item.url} target="_blank" rel="noopener noreferrer">
+            {hnHref(item) ? (
+              <a href={hnHref(item)!} target="_blank" rel="noopener noreferrer">
                 {item.title ?? item.body?.slice(0, 120) ?? "(no title)"}
               </a>
             ) : (
@@ -393,8 +400,8 @@ function FeedRow({ item, entities }: { item: FeedItem; entities: Entity[] }) {
       </div>
       <div className="feedrow-actions">
         <button className="iconbtn" title="Star">☆</button>
-        {item.url && (
-          <a className="iconbtn" href={item.url} target="_blank" rel="noopener noreferrer" title="Open">↗</a>
+        {hnHref(item) && (
+          <a className="iconbtn" href={hnHref(item)!} target="_blank" rel="noopener noreferrer" title="Open">↗</a>
         )}
       </div>
     </article>
@@ -431,8 +438,8 @@ function FeedTable({ items, entities }: { items: FeedItem[]; entities: Entity[] 
                 </td>
                 <td className="mono dim">{relativeTime(i.publishedAt ?? i.createdAt)}</td>
                 <td className="tbl-title">
-                  {i.url ? (
-                    <a href={i.url} target="_blank" rel="noopener noreferrer">
+                  {hnHref(i) ? (
+                    <a href={hnHref(i)!} target="_blank" rel="noopener noreferrer">
                       {i.title ?? i.body?.slice(0, 80) ?? "(no title)"}
                     </a>
                   ) : (
