@@ -25,6 +25,7 @@ type ClusterItem = {
   title: string | null;
   body: string | null;
   url: string | null;
+  externalId: string | null;
   platform: string;
   publishedAt: string | null;
   ingestedAt: string;
@@ -405,13 +406,16 @@ export default function NarrativesPage() {
 
   function renderItemRow(item: ClusterItem, i: number, narrativeId: string) {
     const effectiveSignal = item.analystSignal ?? item.itemSignal;
+    const href = item.platform === "hackernews" && item.externalId
+      ? `https://news.ycombinator.com/item?id=${item.externalId}`
+      : item.url;
     return (
       <div key={i} className="cluster-item-row" style={{ alignItems: "flex-start", gap: 6 }}>
         <PlatformChip platform={item.platform} size="sm" />
         <span className="cluster-item-title" style={{ flex: 1 }}>
-          {item.url ? (
-            <a href={item.url} target="_blank" rel="noopener noreferrer">
-              {cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? item.url}
+          {href ? (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? href}
             </a>
           ) : (
             cleanTitle(item.title) ?? item.body?.slice(0, 140) ?? "—"

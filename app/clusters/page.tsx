@@ -26,6 +26,7 @@ type ClusterItem = {
   title: string | null;
   body: string | null;
   url: string | null;
+  externalId: string | null;
   platform: string;
   publishedAt: string | null;
   ingestedAt: string;
@@ -599,13 +600,16 @@ export default function ClustersPage() {
 
   function renderItemRow(item: ClusterItem, i: number) {
     const effectiveSignal = item.analystSignal ?? item.itemSignal;
+    const href = item.platform === "hackernews" && item.externalId
+      ? `https://news.ycombinator.com/item?id=${item.externalId}`
+      : item.url;
     return (
       <div key={i} className="cluster-item-row">
         <PlatformChip platform={item.platform} size="sm" />
         <span className="cluster-item-title">
-          {item.url ? (
-            <a href={item.url} target="_blank" rel="noopener noreferrer">
-              {cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? item.url}
+          {href ? (
+            <a href={href} target="_blank" rel="noopener noreferrer">
+              {cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? href}
             </a>
           ) : (
             cleanTitle(item.title) ?? item.body?.slice(0, 120) ?? "—"
