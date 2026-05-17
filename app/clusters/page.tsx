@@ -125,6 +125,40 @@ const STAGE_RULES: Array<{ stage: string; color: string; conditions: Array<{ lab
   { stage: "declining",  color: "var(--err)",    conditions: [{ label: "ratio < 50%", check: (v,p) => p > 0 && v/p < 0.5 }, { label: "accel ≤ 0", check: (_v,_p,a) => a <= 0 }] },
 ];
 
+function StageKey() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-40)", textTransform: "uppercase", letterSpacing: "0.08em" }}
+      >
+        <span>{open ? "▾" : "▸"}</span>
+        <span>Stage key</span>
+        <span style={{ opacity: 0.5, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>· ratio = velocity ÷ peak</span>
+      </button>
+      {open && (
+        <div style={{
+          marginTop: 8, padding: "10px 14px", border: "1px solid var(--border)",
+          borderRadius: 6, background: "var(--paper)",
+          display: "grid", gridTemplateColumns: "auto 1fr", gap: "5px 20px", alignItems: "center",
+        }}>
+          {STAGE_RULES.map(({ stage, color, conditions }) => (
+            <>
+              <span key={stage + "-label"} style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color }}>
+                {stage}
+              </span>
+              <span key={stage + "-cond"} style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-60)" }}>
+                {conditions.map((c) => c.label).join("  ·  ")}
+              </span>
+            </>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum, firstSeenAt }: {
   stage: string;
   velocity24h?: number | null;
@@ -696,6 +730,8 @@ export default function ClustersPage() {
           </div>
         )}
 
+        <StageKey />
+
         <div className="toolbar" style={{ flexWrap: "wrap", gap: 8 }}>
           <div className="filter-group">
             <span className="filter-label">Entity</span>
@@ -758,7 +794,7 @@ export default function ClustersPage() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
                         <ClassificationPill classification={cluster.effectiveClassification} />
-                        {cluster.narrativeStage && cluster.effectiveClassification === "narrative" && <StagePill stage={cluster.narrativeStage} velocity24h={cluster.velocity24h} prevVelocity24h={cluster.prevVelocity24h} peakMomentum={cluster.peakMomentum} firstSeenAt={cluster.firstSeenAt} />}
+                        {cluster.narrativeStage && <StagePill stage={cluster.narrativeStage} velocity24h={cluster.velocity24h} prevVelocity24h={cluster.prevVelocity24h} peakMomentum={cluster.peakMomentum} firstSeenAt={cluster.firstSeenAt} />}
                         {cluster.momentum != null && cluster.momentum > 0 && (
                           <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-40)" }}>↑{cluster.momentum.toFixed(1)}/day</span>
                         )}
