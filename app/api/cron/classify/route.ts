@@ -39,45 +39,13 @@ export async function GET(req: Request) {
     .limit(BATCH_SIZE);
 
   let classified = 0;
+  let stageRefreshed = 0;
   let signalsTagged = 0;
 
   for (const cluster of toClassify) {
-    if (
-      cluster.classification !== "unclassified" &&
-      cluster.classifiedAt &&
-      cluster.lastSeenAt <= cluster.classifiedAt
-    ) {
-      continue;
-    }
-
     try {
-      const [entity] = cluster.entityId
-        ? await db
-            .select({ label: trackedEntities.label })
-            .from(trackedEntities)
-            .where(eq(trackedEntities.id, cluster.entityId))
-        : [{ label: "Unknown" }];
-
-      const items = await db
-        .select({
-          title: ingestedItems.title,
-          body: ingestedItems.body,
-          platform: ingestedItems.platform,
-        })
-        .from(clusterItems)
-        .innerJoin(ingestedItems, eq(clusterItems.itemId, ingestedItems.id))
-        .where(eq(clusterItems.clusterId, cluster.id))
-        .limit(5);
-
-      const platforms = [...new Set(items.map((i) => i.platform).filter(Boolean))];
-      const nonNewsPlatformCount = platforms.filter((p) => !NEWS_PLATFORMS.includes(p)).length;
-      const titles = items.map((i) => i.title ?? i.body?.slice(0, 120) ?? "").filter(Boolean);
-      if (titles.length === 0) continue;
-
-      const ageInDays =
-        (now.getTime() - new Date(cluster.firstSeenAt).getTime()) / (1000 * 60 * 60 * 24);
-
-      // Velocity windows for stage computation
+      // Always recompute velocity + stage so time-based transitions (e.g. emerging → developing)
+      // apply even when no new items have arrived since last AI classification.
       const [v24] = await db
         .select({ cnt: count(clusterItems.itemId) })
         .from(clusterItems)
@@ -96,20 +64,21 @@ export async function GET(req: Request) {
         );
       const prevVelocity24h = vPrev?.cnt ?? 0;
 
-      // momentum shown in UI: average daily rate over 48h window
+      const items = await db
+        .select({ title: ingestedItems.title, body: ingestedItems.body, platform: ingestedItems.platform })
+        .from(clusterItems)
+        .innerJoin(ingestedItems, eq(clusterItems.itemId, ingestedItems.id))
+        .where(eq(clusterItems.clusterId, cluster.id))
+        .limit(5);
+
+      const platforms = [...new Set(items.map((i) => i.platform).filter(Boolean))];
+      const nonNewsPlatformCount = platforms.filter((p) => !NEWS_PLATFORMS.includes(p)).length;
+
+      const ageInDays =
+        (now.getTime() - new Date(cluster.firstSeenAt).getTime()) / (1000 * 60 * 60 * 24);
+
       const momentum = (velocity24h + prevVelocity24h) / 2;
-
-      // Update peak: track the highest single-day velocity ever seen
       const newPeakMomentum = Math.max(cluster.peakMomentum ?? 0, velocity24h);
-
-      const result = await classifyCluster({
-        entityLabel: entity?.label ?? "Unknown",
-        clusterLabel: cluster.label,
-        itemTitles: titles,
-        itemCount: cluster.itemCount,
-        ageInDays,
-        platformCount: platforms.length,
-      });
 
       const narrativeStage = computeNarrativeStage({
         velocity24h,
@@ -118,6 +87,40 @@ export async function GET(req: Request) {
         ageInDays,
         platformCount: platforms.length,
         nonNewsPlatformCount,
+      });
+
+      const needsAIClassify =
+        cluster.classification === "unclassified" ||
+        !cluster.classifiedAt ||
+        cluster.lastSeenAt > cluster.classifiedAt;
+
+      if (!needsAIClassify) {
+        // Velocity + stage refresh only — skip the AI call
+        await db
+          .update(clusters)
+          .set({ narrativeStage, velocity24h, prevVelocity24h, momentum, peakMomentum: newPeakMomentum, platformCount: platforms.length })
+          .where(eq(clusters.id, cluster.id));
+        stageRefreshed++;
+        continue;
+      }
+
+      const titles = items.map((i) => i.title ?? i.body?.slice(0, 120) ?? "").filter(Boolean);
+      if (titles.length === 0) continue;
+
+      const [entity] = cluster.entityId
+        ? await db
+            .select({ label: trackedEntities.label })
+            .from(trackedEntities)
+            .where(eq(trackedEntities.id, cluster.entityId))
+        : [{ label: "Unknown" }];
+
+      const result = await classifyCluster({
+        entityLabel: entity?.label ?? "Unknown",
+        clusterLabel: cluster.label,
+        itemTitles: titles,
+        itemCount: cluster.itemCount,
+        ageInDays,
+        platformCount: platforms.length,
       });
 
       await db
@@ -158,11 +161,7 @@ export async function GET(req: Request) {
         if (untaggedItems.length > 0) {
           const signalResult = await classifyItemSignals({
             narrativeSummary: result.narrativeSummary,
-            items: untaggedItems.map((i) => ({
-              title: i.title,
-              body: i.body,
-              platform: i.platform,
-            })),
+            items: untaggedItems.map((i) => ({ title: i.title, body: i.body, platform: i.platform })),
           });
 
           for (const s of signalResult.items) {
@@ -187,5 +186,5 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, classified, signalsTagged });
+  return NextResponse.json({ ok: true, classified, stageRefreshed, signalsTagged });
 }
