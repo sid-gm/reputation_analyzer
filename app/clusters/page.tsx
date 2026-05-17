@@ -192,7 +192,7 @@ function StagePill({ stage, velocity24h, prevVelocity24h, peakMomentum, firstSee
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: s.color, background: s.bg, borderRadius: 3, padding: "1px 5px", lineHeight: 1.4, cursor: "default" }}>
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: s.color, background: s.bg, borderRadius: 3, padding: "2px 6px", cursor: "default" }}>
         {s.label}
       </span>
       {hovered && (

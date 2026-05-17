@@ -626,9 +626,9 @@ export default function NarrativesPage() {
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-30)", flexShrink: 0, textAlign: "right" }}>
                       <div>{n.itemCount} items</div>
-                      <div>{shortDate(n.firstSeenAt)} → {relativeTime(n.lastSeenAt)}</div>
                     </div>
                   </div>
+                  <div className="cluster-card-meta">{shortDate(n.firstSeenAt)} → {relativeTime(n.lastSeenAt)}</div>
 
                   {/* Analyst classify pills */}
                   <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>

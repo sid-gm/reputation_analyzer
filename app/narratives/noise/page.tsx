@@ -379,9 +379,9 @@ export default function NoisePage() {
                     </div>
                     <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-30)", flexShrink: 0, textAlign: "right" }}>
                       <div>{cluster.itemCount} items</div>
-                      <div>{shortDate(cluster.firstSeenAt)} → {relativeTime(cluster.lastSeenAt)}</div>
                     </div>
                   </div>
+                  <div className="cluster-card-meta">{shortDate(cluster.firstSeenAt)} → {relativeTime(cluster.lastSeenAt)}</div>
 
                   {(() => {
                     const renderItem = (item: ClusterItem, i: number) => {
