@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { cx, PlatformChip, Dot } from "@/components/primitives";
+import { VelocitySparkline } from "@/components/VelocitySparkline";
 import { useCompany } from "@/components/CompanyContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -828,9 +829,14 @@ export default function ClustersPage() {
                         </span>
                       )}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                      <span className="cluster-card-count">{cluster.itemCount} items</span>
-                      {!mergeMode && <OverrideMenu clusterId={cluster.id} current={cluster.analystClassification} onDone={fetchClusters} />}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                      {cluster.narrativeStage && cluster.itemCount >= 2 && (
+                        <VelocitySparkline clusterId={cluster.id} stage={cluster.narrativeStage} />
+                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <span className="cluster-card-count">{cluster.itemCount} items</span>
+                        {!mergeMode && <OverrideMenu clusterId={cluster.id} current={cluster.analystClassification} onDone={fetchClusters} />}
+                      </div>
                     </div>
                   </div>
 

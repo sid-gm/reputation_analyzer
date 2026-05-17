@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { cx, PlatformChip, Dot } from "@/components/primitives";
+import { VelocitySparkline } from "@/components/VelocitySparkline";
 import { useCompany } from "@/components/CompanyContext";
 
 type MergeInfo = {
@@ -624,8 +625,13 @@ export default function NarrativesPage() {
                         )}
                       </div>
                     </div>
-                    <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-30)", flexShrink: 0, textAlign: "right" }}>
-                      <div>{n.itemCount} items</div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
+                      {n.narrativeStage && n.itemCount >= 2 && (
+                        <VelocitySparkline clusterId={n.id} stage={n.narrativeStage} />
+                      )}
+                      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-30)", textAlign: "right" }}>
+                        {n.itemCount} items
+                      </div>
                     </div>
                   </div>
                   <div className="cluster-card-meta">{shortDate(n.firstSeenAt)} → {relativeTime(n.lastSeenAt)}</div>
